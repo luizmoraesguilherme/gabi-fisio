@@ -94,7 +94,7 @@
 
   function refresh() {
     updateCount();
-    ({ pedidos: loadPedidos, agenda: loadAgenda, sessoes: loadSessoes, clientes: loadClientes, pacotes: loadPacotes })[S.view]();
+    ({ pedidos: loadPedidos, agenda: loadAgenda, sessoes: loadSessoes, clientes: loadClientes, pacotes: loadPacotes, fotos: loadFotos })[S.view]();
   }
   async function updateCount() {
     try {
@@ -460,6 +460,66 @@
         : '<p class="empty">Nenhum pacote com esses filtros. Quando você confirmar um pacote pedido pelo site, ele aparece em "Ativos".</p>';
     } catch (err) { fail(err); }
   }
+
+
+  // ---------- Fotos do site ----------
+  const FOTOS = [
+    { slot: 'retrato', titulo: 'Retrato (página inicial)', dica: 'Foto em pé, de preferência com a Gabi de frente ou levemente de lado.', ratio: 4 / 5 },
+    { slot: 'atendimento', titulo: 'Em atendimento (Quem sou eu)', dica: 'Foto quadrada: a Gabi em atendimento ou posando com o material.', ratio: 1 },
+  ];
+  async function loadFotos() {
+    try {
+      const { fotos } = await fetch('/api/fotos').then((r) => r.json());
+      $('#fotos-grid').innerHTML = FOTOS.map((f) => `
+        <article class="foto-card">
+          <div class="foto-prev" style="aspect-ratio:${f.ratio === 1 ? '1 / 1' : '4 / 5'}">${fotos[f.slot] ? `<img src="/api/fotos/${f.slot}?v=${Math.round(fotos[f.slot])}" alt="">` : '<p>Sem foto ainda</p>'}</div>
+          <h3>${f.titulo}</h3>
+          <p class="muted">${f.dica}</p>
+          <div class="foto-acts">
+            <label class="btn btn-primary btn-sm">${fotos[f.slot] ? 'Trocar foto' : 'Enviar foto'}<input type="file" accept="image/*" data-foto="${f.slot}" data-ratio="${f.ratio}" hidden></label>
+            ${fotos[f.slot] ? `<button type="button" class="link-btn link-danger" data-fotodel="${f.slot}">Remover</button>` : ''}
+          </div>
+        </article>`).join('');
+    } catch (err) { fail(err); }
+  }
+  // Corta no formato do site e reduz para ~1400px de altura antes de enviar.
+  function prepararFoto(file, ratio) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        let sw = w, sh = w / ratio;
+        if (sh > h) { sh = h; sw = h * ratio; }
+        const sx = (w - sw) / 2, sy = (h - sh) / 2;
+        const outH = Math.min(1400, Math.round(sh)), outW = Math.round(outH * ratio);
+        const cv = document.createElement('canvas');
+        cv.width = outW; cv.height = outH;
+        cv.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+        cv.toBlob((b) => (b ? resolve(b) : reject(new Error('Não consegui preparar essa foto.'))), 'image/jpeg', 0.86);
+        URL.revokeObjectURL(img.src);
+      };
+      img.onerror = () => reject(new Error('Não consegui abrir essa foto. Tente um JPG ou PNG.'));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  document.addEventListener('change', async (e) => {
+    const inp = e.target.closest('input[data-foto]');
+    if (!inp || !inp.files[0]) return;
+    try {
+      setStatus('Enviando foto…', true);
+      const blob = await prepararFoto(inp.files[0], Number(inp.dataset.ratio));
+      const r = await fetch(`/api/admin/fotos/${inp.dataset.foto}`, { method: 'PUT', body: blob, headers: { 'Content-Type': 'image/jpeg' }, credentials: 'same-origin' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não consegui enviar.');
+      setStatus('Foto atualizada. Já aparece no site.', true);
+      loadFotos();
+    } catch (err) { setStatus(err.message); }
+  });
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-fotodel]');
+    if (!b || !confirm('Remover esta foto do site?')) return;
+    await api(`/api/admin/fotos/${b.dataset.fotodel}`, { method: 'DELETE' }).catch(fail);
+    loadFotos();
+  });
 
   // ---------- Início ----------
   fetch('/api/services').then((r) => r.json()).then(({ services: s }) => { services = Object.fromEntries(s.map((x) => [x.id, x.name])); })

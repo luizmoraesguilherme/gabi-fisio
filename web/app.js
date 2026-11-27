@@ -22,6 +22,16 @@
   };
   const need = () => PLANS[state.plan];
 
+  fetch('/api/fotos').then((r) => r.json()).then(({ fotos }) => {
+    document.querySelectorAll('[data-foto]').forEach((fig) => {
+      const v = fotos[fig.dataset.foto];
+      if (!v) return;
+      const img = fig.querySelector('img');
+      img.onload = () => { img.hidden = false; fig.classList.add('has-photo'); };
+      img.src = `/api/fotos/${fig.dataset.foto}?v=${Math.round(v)}`;
+    });
+  }).catch(() => {});
+
   if (cfg.whatsapp) {
     document.querySelectorAll('.js-whatsapp').forEach((a) => {
       a.href = `https://wa.me/${cfg.whatsapp}?text=${encodeURIComponent('Olá, Gabriela! Vim pelo site e queria tirar uma dúvida.')}`;

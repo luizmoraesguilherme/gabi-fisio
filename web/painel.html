@@ -42,6 +42,7 @@
         <button type="button" data-view="sessoes">Sessões</button>
         <button type="button" data-view="clientes">Clientes</button>
         <button type="button" data-view="pacotes">Pacotes</button>
+        <button type="button" data-view="fotos">Fotos do site</button>
       </nav>
       <p class="form-status" id="panel-status" role="status"></p>
 
@@ -165,6 +166,13 @@
         </div>
         <div class="result-bar" id="p-bar"></div>
         <div id="pac-list" class="pac-list" aria-live="polite"></div>
+      </section>
+
+      <!-- Fotos do site -->
+      <section class="view" id="view-fotos" hidden aria-labelledby="fotos-titulo">
+        <div class="panel-head"><h1 id="fotos-titulo">Fotos do site</h1></div>
+        <p class="fotos-help">As fotos aparecem na página inicial e em "Quem sou eu". Use fotos em pé ou quadradas, com boa luz. O site reduz o tamanho sozinho.</p>
+        <div class="fotos-grid" id="fotos-grid"></div>
       </section>
     </section>
   </main>

@@ -13,6 +13,7 @@
   --fita-azul-escura: #1D5C98;
   --fita-rosa: #E2668A;
   --fita-bege: #EBD5C0;
+  --areia: #F5EDE4;
   --ok: #2F7D5B;
   --erro: #B4324F;
 
@@ -88,24 +89,6 @@ a:hover { color: var(--tinta); }
 .lede { margin-top: 1.6rem; font-size: 1.3rem; color: var(--tinta-suave); max-width: 34ch; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 2.2rem; }
 
-/* Agenda presa com fita */
-.agenda {
-  position: relative; background: #fff; border: 1px solid var(--linha); border-radius: var(--raio-m);
-  padding: 2.2rem 1.6rem 1.5rem; box-shadow: 0 1px 0 var(--linha), 0 18px 40px -24px rgba(24, 48, 74, .35);
-  transform: rotate(.6deg);
-}
-.agenda h2 { font-size: var(--t-1); font-weight: 700; }
-.agenda-note { margin-top: 1.1rem; font-size: .95rem; color: var(--tinta-suave); }
-.agenda-loading { margin-top: 1rem; color: var(--tinta-suave); }
-.agenda-days { margin-top: 1.1rem; display: grid; gap: 1rem; }
-.agenda-day h3 { font-family: var(--f-texto); font-size: 1rem; font-weight: 700; color: var(--tinta-suave); margin-bottom: .45rem; }
-.agenda-times { display: flex; flex-wrap: wrap; gap: .45rem; }
-.agenda-times button {
-  font: 700 1.05rem/1 var(--f-texto); color: var(--fita-azul-escura); background: var(--nevoa);
-  border: 1px solid transparent; border-radius: var(--raio-s); padding: .65rem .8rem; min-height: 2.75rem; cursor: pointer;
-}
-.agenda-times button:hover { border-color: var(--fita-azul); background: #fff; }
-
 .tape {
   position: absolute; height: 2.1rem; width: 9.5rem; border-radius: .5rem; pointer-events: none;
   background:
@@ -114,13 +97,13 @@ a:hover { color: var(--tinta); }
   box-shadow: 0 2px 4px rgba(24, 48, 74, .18);
   transform-origin: center;
 }
-.tape-a { --c: var(--fita-azul); top: -1.05rem; left: calc(50% - 6rem); width: 8.5rem; transform: rotate(-7deg); }
-.tape-b { --c: var(--fita-rosa); top: -.85rem; left: calc(50% - 1rem); width: 7.5rem; transform: rotate(9deg); opacity: .94; }
+.tape-a { --c: var(--fita-azul); top: -.9rem; left: -1.4rem; width: 8rem; transform: rotate(-38deg); z-index: 2; }
+.tape-b { --c: var(--fita-rosa); bottom: 1.6rem; right: -2rem; width: 8.5rem; transform: rotate(-38deg); opacity: .94; z-index: 2; }
 
 @media (prefers-reduced-motion: no-preference) {
   .tape { animation: aplicar .55s cubic-bezier(.2,.7,.2,1) both; }
-  .tape-a { --r: -7deg; animation-delay: .25s; }
-  .tape-b { --r: 9deg; animation-delay: .5s; }
+  .tape-a { --r: -38deg; animation-delay: .25s; }
+  .tape-b { --r: -38deg; animation-delay: .5s; }
   @keyframes aplicar {
     from { transform: rotate(var(--r)) scaleX(0); }
     to   { transform: rotate(var(--r)) scaleX(1); }
@@ -191,7 +174,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--fita-azul); outl
 /* ---------- Responsivo ---------- */
 @media (max-width: 860px) {
   .hero { grid-template-columns: 1fr; }
-  .agenda { transform: none; margin-top: 1rem; }
   .services { grid-template-columns: 1fr; }
   .steps { grid-template-columns: 1fr; }
 }
@@ -492,3 +474,71 @@ input:focus, select:focus, textarea:focus { border-color: var(--fita-azul); outl
 }
 .tbl td .link-btn { justify-self: start; text-align: left; }
 .tbl td[data-label="Quando"] .t-time { justify-self: start; }
+
+/* ---------- Site completo: retrato, próximos horários, quem sou eu, dúvidas ---------- */
+.hero { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.retrato { position: relative; margin: 0; justify-self: center; width: min(100%, 26rem); }
+.retrato-moldura, .foto-moldura { position: relative; overflow: hidden; background: var(--areia); border-radius: var(--raio-m); }
+.retrato-moldura { aspect-ratio: 4 / 5; }
+.foto-moldura { aspect-ratio: 1 / 1; }
+.retrato img, .foto-lado img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.retrato-vazio { position: absolute; inset: 0; display: grid; place-items: center; background: var(--areia); }
+.retrato-vazio svg { width: 42%; opacity: .9; }
+.has-photo .retrato-vazio { display: none; }
+
+.proximos { background: var(--nevoa); }
+.proximos-in { max-width: var(--max); margin: 0 auto; padding: 1.8rem var(--gutter); display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 1.2rem 3rem; align-items: start; }
+.proximos h2 { font-size: var(--t-1); font-weight: 700; }
+.agenda-note { margin-top: .4rem; font-size: .95rem; color: var(--tinta-suave); }
+.agenda-loading { color: var(--tinta-suave); }
+.agenda-days { display: flex; flex-wrap: wrap; gap: 1rem 2.2rem; }
+.agenda-day h3 { font-family: var(--f-texto); font-size: 1rem; font-weight: 700; color: var(--tinta-suave); margin-bottom: .45rem; }
+.agenda-times { display: flex; flex-wrap: wrap; gap: .45rem; }
+.agenda-times button {
+  font: 700 1.05rem/1 var(--f-texto); color: var(--fita-azul-escura); background: #fff;
+  border: 1px solid var(--linha); border-radius: var(--raio-s); padding: .65rem .8rem; min-height: 2.75rem; cursor: pointer;
+}
+.agenda-times button:hover { border-color: var(--fita-azul); }
+
+.about { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: clamp(2rem, 6vw, 5rem); align-items: center; }
+.foto-lado { margin: 0; }
+.about-copy { display: grid; gap: 1.1rem; justify-items: start; }
+.about-copy h2 { font-size: var(--t-3); font-weight: 800; letter-spacing: -0.025em; }
+.about-copy > p { max-width: 52ch; font-size: 1.15rem; }
+.princ { list-style: none; margin: .6rem 0; padding: 0; display: grid; gap: 0; width: 100%; max-width: 52ch; }
+.princ li { padding: .9rem 0 .9rem 1.1rem; border-left: 4px solid var(--fita-azul); color: var(--tinta-suave); }
+.princ li:nth-child(2) { border-left-color: var(--fita-rosa); }
+.princ li:nth-child(3) { border-left-color: var(--fita-bege); }
+.princ strong { display: block; color: var(--tinta); font-size: 1.1rem; }
+
+.faq-list { max-width: 48rem; border-top: 1px solid var(--linha); }
+.faq-list details { border-bottom: 1px solid var(--linha); }
+.faq-list summary { cursor: pointer; padding: 1.15rem 2.5rem 1.15rem 0; font: 700 1.2rem/1.3 var(--f-display); list-style: none; position: relative; }
+.faq-list summary::-webkit-details-marker { display: none; }
+.faq-list summary::after { content: "+"; position: absolute; right: .2rem; top: 1rem; font: 400 1.8rem/1 var(--f-texto); color: var(--fita-azul); }
+.faq-list details[open] summary::after { content: "\2212"; }
+.faq-list details p { padding: 0 0 1.3rem; color: var(--tinta-suave); max-width: 60ch; }
+
+.foot { background: var(--tinta); color: #D9E3EC; border-top: 0; max-width: none; padding: 0; }
+.foot-in { max-width: var(--max); margin: 0 auto; padding: 2.8rem var(--gutter); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem 3rem; }
+.foot-brand { font-size: 1.3rem; color: #fff; }
+.foot a { color: #fff; }
+.foot-links { display: flex; flex-wrap: wrap; gap: .5rem 1.6rem; align-items: start; }
+
+@media (max-width: 860px) {
+  .hero { grid-template-columns: 1fr; }
+  .retrato { width: min(100%, 22rem); justify-self: start; margin: 1.6rem 0 1rem 1rem; }
+  .proximos-in { grid-template-columns: 1fr; }
+  .about { grid-template-columns: 1fr; }
+  .foto-lado { max-width: 24rem; }
+}
+@media (max-width: 1000px) { .top nav a:not(.nav-cta) { font-size: 1rem; } .top nav { gap: 1rem; } }
+
+.fotos-help { color: var(--tinta-suave); margin: 1.2rem 0; max-width: 56ch; }
+.fotos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 20rem)); gap: 2rem; }
+.foto-card { display: grid; gap: .6rem; align-content: start; }
+.foto-prev { background: var(--areia); border-radius: var(--raio-m); overflow: hidden; display: grid; place-items: center; color: var(--tinta-suave); }
+.foto-prev img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.foto-card h3 { font-size: 1.2rem; }
+.foto-acts { display: flex; gap: 1rem; align-items: center; margin-top: .3rem; }
+.foto-acts label { cursor: pointer; }

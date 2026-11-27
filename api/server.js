@@ -330,6 +330,26 @@ function readJson(req) {
     req.on('error', reject);
   });
 }
+
+// ---------- Fotos do site (ficam no volume de dados, a Gabriela troca pelo painel) ----------
+const PHOTO_SLOTS = ['retrato', 'atendimento'];
+const PHOTO_DIR = path.join(DATA_DIR, 'fotos');
+fs.mkdirSync(PHOTO_DIR, { recursive: true });
+function sniffImage(buf) {
+  if (buf.length > 12 && buf[0] === 0xff && buf[1] === 0xd8) return 'image/jpeg';
+  if (buf.length > 12 && buf.subarray(1, 4).toString() === 'PNG') return 'image/png';
+  if (buf.length > 12 && buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP') return 'image/webp';
+  return null;
+}
+function readRaw(req, max) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => { size += c.length; if (size > max) { reject(new Error('too_large')); req.destroy(); return; } chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
 const clean = (v, max) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, max) : '');
 const ipOf = (req) => (req.headers['x-real-ip'] || req.socket.remoteAddress || '').toString();
 
@@ -340,6 +360,18 @@ async function handle(req, res) {
 
   if (p === '/api/health') return send(res, 200, { ok: true });
   if (p === '/api/services' && m === 'GET') return send(res, 200, { services: SERVICES });
+  const photoPublic = p.match(/^\/api\/fotos\/([a-z]+)$/);
+  if (photoPublic && m === 'GET') {
+    const slot = photoPublic[1];
+    const file = path.join(PHOTO_DIR, slot);
+    if (!PHOTO_SLOTS.includes(slot) || !fs.existsSync(file)) return send(res, 404, { error: 'Sem foto.' });
+    const buf = fs.readFileSync(file);
+    res.writeHead(200, { 'Content-Type': sniffImage(buf) || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+    return res.end(buf);
+  }
+  if (p === '/api/fotos' && m === 'GET') {
+    return send(res, 200, { fotos: Object.fromEntries(PHOTO_SLOTS.map((k) => [k, fs.existsSync(path.join(PHOTO_DIR, k)) ? fs.statSync(path.join(PHOTO_DIR, k)).mtimeMs : 0])) });
+  }
   if (p === '/api/slots' && m === 'GET') {
     return send(res, 200, { slots: availableSlots(), today: fmtDay(nowLocal()), until: SCHEDULE.bookUntil });
   }
@@ -400,6 +432,21 @@ async function handle(req, res) {
   }
   if (p.startsWith('/api/admin/')) {
     if (!validSession(cookies(req).gabi_session)) return send(res, 401, { error: 'Entre com a senha do painel.' });
+
+    const photoAdmin = p.match(/^\/api\/admin\/fotos\/([a-z]+)$/);
+    if (photoAdmin) {
+      const slot = photoAdmin[1];
+      if (!PHOTO_SLOTS.includes(slot)) return send(res, 404, { error: 'Foto desconhecida.' });
+      const file = path.join(PHOTO_DIR, slot);
+      if (m === 'PUT') {
+        let buf;
+        try { buf = await readRaw(req, 3_000_000); } catch { return send(res, 413, { error: 'A foto passou de 3 MB.' }); }
+        if (!sniffImage(buf)) return send(res, 422, { error: 'Envie uma foto JPG, PNG ou WebP.' });
+        fs.writeFileSync(file, buf);
+        return send(res, 200, { ok: true });
+      }
+      if (m === 'DELETE') { fs.rmSync(file, { force: true }); return send(res, 200, { ok: true }); }
+    }
 
     if (p === '/api/admin/me') return send(res, 200, { ok: true });
 
