@@ -13,7 +13,7 @@ services:
       SESSION_SECRET: ${SESSION_SECRET}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
     labels:
-      gabi.commit: "8de2695"
+      gabi.commit: "4b000ab"
     configs:
       - source: api_server
         target: /app/server.js
@@ -34,7 +34,7 @@ services:
     ports:
       - "3100:80"
     labels:
-      gabi.commit: "8de2695"
+      gabi.commit: "4b000ab"
     configs:
       - source: nginx_conf
         target: /etc/nginx/conf.d/default.conf
