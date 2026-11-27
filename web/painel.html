@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Painel da Gabriela</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Schibsted+Grotesk:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="painel">
+  <header class="top">
+    <a class="brand" href="./">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="12" width="26" height="8" rx="2" transform="rotate(-24 16 16)" fill="var(--fita-azul)"/><rect x="3" y="12" width="26" height="8" rx="2" transform="rotate(24 16 16)" fill="var(--fita-rosa)" opacity=".9"/></svg>
+      <span>Painel <small>agenda da Gabriela</small></span>
+    </a>
+    <nav aria-label="Painel"><button class="link-btn" id="logout" type="button" hidden>Sair</button></nav>
+  </header>
+
+  <main class="panel-main">
+    <section id="login" class="login" hidden aria-labelledby="login-titulo">
+      <h1 id="login-titulo">Entrar no painel</h1>
+      <form id="login-form" class="booking-form">
+        <label class="field">
+          <span>Senha</span>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit">Entrar</button>
+          <p class="form-status" id="login-status" role="status"></p>
+        </div>
+      </form>
+    </section>
+
+    <section id="app" hidden>
+      <div class="panel-head">
+        <h1>Pedidos</h1>
+        <div class="tabs" role="tablist" aria-label="Filtrar pedidos">
+          <button role="tab" data-status="pendente" aria-selected="true">A confirmar <span class="count" id="count-pendente"></span></button>
+          <button role="tab" data-status="confirmado" aria-selected="false">Confirmados</button>
+          <button role="tab" data-status="concluido" aria-selected="false">Concluídos</button>
+          <button role="tab" data-status="" aria-selected="false">Todos</button>
+        </div>
+      </div>
+      <p class="form-status" id="panel-status" role="status"></p>
+      <div id="list" class="bookings" aria-live="polite"></div>
+
+      <section class="blocks" aria-labelledby="blocks-titulo">
+        <h2 id="blocks-titulo">Dias de folga</h2>
+        <p>Dias marcados aqui somem da agenda do site.</p>
+        <form id="block-form" class="block-form">
+          <label class="field"><span>Data</span><input type="date" name="day" required></label>
+          <label class="field"><span>Motivo <i>opcional</i></span><input name="reason" maxlength="80" placeholder="Viagem, curso…"></label>
+          <button class="btn btn-quiet" type="submit">Bloquear dia</button>
+        </form>
+        <ul id="block-list" class="block-list"></ul>
+      </section>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="painel.js"></script>
+</body>
+</html>

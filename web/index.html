@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gabriela Fisioterapia em casa</title>
+  <meta name="description" content="Fisioterapia e massagem no conforto da sua casa. Idosos, pós-operatório, gestantes, drenagem e mais. Escolha um horário livre e peça seu atendimento.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Schibsted+Grotesk:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#agendar">Pular para o agendamento</a>
+
+  <header class="top">
+    <a class="brand" href="#">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="12" width="26" height="8" rx="2" transform="rotate(-24 16 16)" fill="var(--fita-azul)"/><rect x="3" y="12" width="26" height="8" rx="2" transform="rotate(24 16 16)" fill="var(--fita-rosa)" opacity=".9"/></svg>
+      <span>Gabriela <small>fisioterapia em casa</small></span>
+    </a>
+    <nav aria-label="Principal">
+      <a href="#atendimentos">Atendimentos</a>
+      <a href="#como-funciona">Como funciona</a>
+      <a class="nav-cta" href="#agendar">Agendar</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <h1>A fisioterapia vai até a sua casa.</h1>
+        <p class="lede">Sem trânsito, sem sala de espera. A Gabriela leva o atendimento até você, seja para recuperar o movimento depois de uma cirurgia, cuidar de quem já tem mais idade ou simplesmente aliviar o corpo.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#agendar">Escolher um horário</a>
+          <a class="btn btn-quiet js-whatsapp" href="#" hidden>Falar no WhatsApp</a>
+        </div>
+      </div>
+
+      <aside class="agenda" aria-labelledby="agenda-titulo">
+        <span class="tape tape-a" aria-hidden="true"></span>
+        <span class="tape tape-b" aria-hidden="true"></span>
+        <h2 id="agenda-titulo">Próximos horários livres</h2>
+        <div class="agenda-days" id="agenda-days" aria-live="polite">
+          <p class="agenda-loading">Carregando a agenda…</p>
+        </div>
+        <p class="agenda-note">Toque num horário para reservar. Cada visita dura cerca de uma hora.</p>
+      </aside>
+    </section>
+
+    <section class="section" id="atendimentos" aria-labelledby="atend-titulo">
+      <div class="section-head">
+        <h2 id="atend-titulo">Atendimentos</h2>
+        <p>Tudo feito na sua casa, com o material que a sessão pede.</p>
+      </div>
+      <div class="services">
+        <div class="service-group">
+          <h3>Reabilitação</h3>
+          <ul id="services-reabilitacao" class="service-list"></ul>
+        </div>
+        <div class="service-group">
+          <h3>Bem-estar</h3>
+          <ul id="services-bem-estar" class="service-list"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-steps" id="como-funciona" aria-labelledby="como-titulo">
+      <div class="section-head">
+        <h2 id="como-titulo">Como funciona</h2>
+      </div>
+      <ol class="steps">
+        <li>
+          <h3>Você escolhe o horário</h3>
+          <p>Veja os horários livres aqui no site, escolha o atendimento e informe o endereço.</p>
+        </li>
+        <li>
+          <h3>A Gabriela confirma</h3>
+          <p>Ela responde pelo WhatsApp para confirmar a visita e tirar dúvidas sobre o caso.</p>
+        </li>
+        <li>
+          <h3>Atendimento em casa</h3>
+          <p>No dia marcado ela chega com o necessário. Você só precisa de um espaço livre no chão ou uma cama firme.</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section booking" id="agendar" aria-labelledby="agendar-titulo">
+      <div class="section-head">
+        <h2 id="agendar-titulo">Pedir um atendimento</h2>
+        <p>O horário fica reservado para você até a Gabriela confirmar.</p>
+      </div>
+
+      <form id="booking-form" class="booking-form" novalidate>
+        <fieldset>
+          <legend>Atendimento</legend>
+          <label class="field">
+            <span>Qual atendimento?</span>
+            <select name="service" id="service" required>
+              <option value="">Escolha</option>
+            </select>
+            <em class="error" data-for="service"></em>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Dia e horário</legend>
+          <div class="day-picker" id="day-picker" role="radiogroup" aria-label="Dia"></div>
+          <div class="time-picker" id="time-picker" role="radiogroup" aria-label="Horário"></div>
+          <p class="picked" id="picked" aria-live="polite">Nenhum horário escolhido.</p>
+          <em class="error" data-for="slot"></em>
+        </fieldset>
+
+        <fieldset>
+          <legend>Seus dados</legend>
+          <div class="grid-2">
+            <label class="field">
+              <span>Seu nome</span>
+              <input name="name" autocomplete="name" required maxlength="80">
+              <em class="error" data-for="name"></em>
+            </label>
+            <label class="field">
+              <span>WhatsApp com DDD</span>
+              <input name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(12) 99999-9999" required maxlength="30">
+              <em class="error" data-for="phone"></em>
+            </label>
+          </div>
+          <label class="field">
+            <span>Endereço do atendimento</span>
+            <input name="address" autocomplete="street-address" placeholder="Rua, número, bairro e cidade" required maxlength="200">
+            <em class="error" data-for="address"></em>
+          </label>
+          <label class="field">
+            <span>Para quem é o atendimento? <i>opcional</i></span>
+            <input name="forWhom" placeholder="Para mim, minha mãe, meu pai…" maxlength="80">
+          </label>
+          <label class="field">
+            <span>Algo que a Gabriela deva saber? <i>opcional</i></span>
+            <textarea name="notes" rows="3" maxlength="600" placeholder="Cirurgia recente, dores, se a pessoa tem dificuldade para andar…"></textarea>
+          </label>
+          <label class="hp" aria-hidden="true">Site <input name="website" tabindex="-1" autocomplete="off"></label>
+        </fieldset>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit" id="submit">Pedir agendamento</button>
+          <p class="form-status" id="form-status" role="status"></p>
+        </div>
+      </form>
+
+      <div class="done" id="done" hidden tabindex="-1">
+        <h3>Pedido enviado</h3>
+        <p id="done-text">A Gabriela vai confirmar pelo WhatsApp.</p>
+        <button class="btn btn-quiet" type="button" id="new-booking">Fazer outro pedido</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p><strong>Gabriela</strong>, fisioterapia e massagem a domicílio.</p>
+    <p class="foot-links"><a class="js-whatsapp" href="#" hidden>WhatsApp</a></p>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
