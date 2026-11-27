@@ -80,6 +80,37 @@ db.exec(`
     paid_at TEXT,
     updated_at TEXT
   );
+  CREATE TABLE IF NOT EXISTS prices (
+    service TEXT NOT NULL,
+    plan TEXT NOT NULL,
+    price REAL,
+    PRIMARY KEY (service, plan)
+  );
+  CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    price REAL NOT NULL,
+    stock INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    ml_url TEXT,
+    shopee_url TEXT
+  );
+  CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    delivery TEXT NOT NULL,
+    address TEXT,
+    notes TEXT,
+    items TEXT NOT NULL,
+    total REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'novo',
+    updated_at TEXT
+  );
   CREATE TABLE IF NOT EXISTS blocks (
     day TEXT PRIMARY KEY,
     reason TEXT
@@ -89,6 +120,33 @@ db.exec(`
 // Migração: sessões podem pertencer a um pacote.
 if (!db.prepare(`PRAGMA table_info(bookings)`).all().some((c) => c.name === 'package_id')) {
   db.exec(`ALTER TABLE bookings ADD COLUMN package_id INTEGER REFERENCES packages(id)`);
+}
+
+if (!db.prepare(`PRAGMA table_info(bookings)`).all().some((c) => c.name === 'price')) {
+  db.exec(`ALTER TABLE bookings ADD COLUMN price REAL`);
+}
+
+// ---------- Loja: categorias e produtos de exemplo ----------
+const CATEGORIES = [
+  { id: 'oleos', name: 'Óleos essenciais' },
+  { id: 'acessorios', name: 'Acessórios para massagem' },
+  { id: 'fitas', name: 'Fitas e faixas' },
+  { id: 'autocuidado', name: 'Autocuidado em casa' },
+];
+const ORDER_STATUSES = ['novo', 'confirmado', 'pago', 'enviado', 'entregue', 'cancelado'];
+if (db.prepare(`SELECT COUNT(*) AS n FROM products`).get().n === 0) {
+  const seed = db.prepare(`INSERT INTO products (created_at, name, category, description, price, stock) VALUES (?,?,?,?,?,?)`);
+  const now = new Date().toISOString();
+  [
+    ['Óleo essencial de lavanda 10 ml', 'oleos', 'Aroma calmante, usado nas massagens relaxantes. Diluir antes de aplicar na pele.', 39.9, 14],
+    ['Óleo essencial de eucalipto 10 ml', 'oleos', 'Aroma fresco e revigorante. Ótimo para difusor no fim do dia.', 34.9, 10],
+    ['Óleo de massagem de amêndoas 120 ml', 'oleos', 'Óleo neutro e leve, base das massagens e da drenagem.', 29.9, 20],
+    ['Rolo de espuma para alongamento', 'acessorios', 'Rolo firme de 33 cm para soltar a musculatura das costas e das pernas.', 89.9, 8],
+    ['Bola de massagem com cravos', 'acessorios', 'Libera pontos de tensão nos pés, ombros e glúteos. Cabe na bolsa.', 24.9, 25],
+    ['Fita kinesio azul 5 cm x 5 m', 'fitas', 'Fita elástica adesiva, a mesma das sessões. Resiste ao banho.', 32.9, 18],
+    ['Faixa elástica de resistência leve', 'fitas', 'Para os exercícios que a Gabriela passa para fazer entre as visitas.', 27.9, 16],
+    ['Bolsa térmica de gel quente e frio', 'autocuidado', 'Alivia dores e inchaço. Serve para compressa quente ou fria.', 44.9, 12],
+  ].forEach((r) => seed.run(now, ...r));
 }
 
 const q = {
@@ -350,6 +408,26 @@ function readRaw(req, max) {
     req.on('error', reject);
   });
 }
+
+// ---------- Preços por atendimento ----------
+const getPrice = db.prepare(`SELECT price FROM prices WHERE service = ? AND plan = ?`);
+const priceOf = (service, plan) => { const r = getPrice.get(service, plan); return r && r.price != null ? r.price : null; };
+const pricesMap = () => {
+  const out = {};
+  for (const sv of SERVICES) out[sv.id] = { avulso: null, pacote4: null, pacote8: null };
+  for (const r of db.prepare(`SELECT service, plan, price FROM prices`).all()) if (out[r.service]) out[r.service][r.plan] = r.price;
+  return out;
+};
+const parseMoney = (v) => {
+  if (v === null || v === undefined || String(v).trim() === '') return null;
+  let t = String(v).trim().replace(/[^\d.,]/g, '');
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 && n < 100000 ? Math.round(n * 100) / 100 : NaN;
+};
+const productPublic = (r) => ({ id: r.id, name: r.name, category: r.category, description: r.description, price: r.price, stock: r.stock, photo: photoVersion(`p${r.id}`) });
+const photoVersion = (slot) => { const f = path.join(PHOTO_DIR, slot); return fs.existsSync(f) ? Math.round(fs.statSync(f).mtimeMs) : 0; };
+const slotOk = (slot) => PHOTO_SLOTS.includes(slot) || (/^p\d+$/.test(slot) && db.prepare(`SELECT 1 FROM products WHERE id = ?`).get(Number(slot.slice(1))));
 const clean = (v, max) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, max) : '');
 const ipOf = (req) => (req.headers['x-real-ip'] || req.socket.remoteAddress || '').toString();
 
@@ -359,12 +437,53 @@ async function handle(req, res) {
   const m = req.method;
 
   if (p === '/api/health') return send(res, 200, { ok: true });
-  if (p === '/api/services' && m === 'GET') return send(res, 200, { services: SERVICES });
-  const photoPublic = p.match(/^\/api\/fotos\/([a-z]+)$/);
+  if (p === '/api/services' && m === 'GET') {
+    const pm = pricesMap();
+    return send(res, 200, { services: SERVICES.map((sv) => ({ ...sv, prices: pm[sv.id] })) });
+  }
+  if (p === '/api/products' && m === 'GET') {
+    const rows = db.prepare(`SELECT * FROM products WHERE active = 1 ORDER BY category, name`).all();
+    return send(res, 200, { categories: CATEGORIES, products: rows.map(productPublic) });
+  }
+  if (p === '/api/orders' && m === 'POST') {
+    if (limited(`order:${ipOf(req)}`, 10, 3600 * 1000)) return send(res, 429, { error: 'Muitos pedidos seguidos. Tente de novo em uma hora ou chame no WhatsApp.' });
+    const b = await readJson(req);
+    if (b.website) return send(res, 201, { ok: true });
+    const data = { name: clean(b.name, 80), phone: clean(b.phone, 30), delivery: b.delivery === 'entrega' ? 'entrega' : 'retirada', address: clean(b.address, 200), notes: clean(b.notes, 400) };
+    const errors = {};
+    if (data.name.length < 2) errors.name = 'Escreva seu nome.';
+    if (data.phone.replace(/\D/g, '').length < 10) errors.phone = 'Informe um telefone com DDD.';
+    if (data.delivery === 'entrega' && data.address.length < 5) errors.address = 'Informe o endereço de entrega.';
+    const wanted = new Map();
+    for (const it of Array.isArray(b.items) ? b.items.slice(0, 40) : []) {
+      const id = Number(it.id), qty = Math.floor(Number(it.qty));
+      if (Number.isInteger(id) && qty > 0) wanted.set(id, Math.min(99, (wanted.get(id) || 0) + qty));
+    }
+    if (!wanted.size) errors.items = 'A sacola está vazia.';
+    if (Object.keys(errors).length) return send(res, 422, { errors });
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const lines = [];
+      let total = 0;
+      for (const [id, qty] of wanted) {
+        const pr = db.prepare(`SELECT * FROM products WHERE id = ? AND active = 1`).get(id);
+        if (!pr) { db.exec('ROLLBACK'); return send(res, 409, { errors: { items: 'Um dos produtos não está mais disponível. Atualize a página.' } }); }
+        if (pr.stock < qty) { db.exec('ROLLBACK'); return send(res, 409, { errors: { items: pr.stock > 0 ? `Só temos ${pr.stock} de "${pr.name}".` : `"${pr.name}" acabou.` } }); }
+        lines.push({ id, name: pr.name, qty, price: pr.price });
+        total += pr.price * qty;
+      }
+      for (const l of lines) db.prepare(`UPDATE products SET stock = stock - ? WHERE id = ?`).run(l.qty, l.id);
+      const r = db.prepare(`INSERT INTO orders (created_at, name, phone, delivery, address, notes, items, total) VALUES (?,?,?,?,?,?,?,?)`)
+        .run(new Date().toISOString(), data.name, data.phone, data.delivery, data.address, data.notes, JSON.stringify(lines), Math.round(total * 100) / 100);
+      db.exec('COMMIT');
+      return send(res, 201, { ok: true, id: Number(r.lastInsertRowid), total: Math.round(total * 100) / 100 });
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+  }
+  const photoPublic = p.match(/^\/api\/fotos\/([a-z0-9]+)$/);
   if (photoPublic && m === 'GET') {
     const slot = photoPublic[1];
     const file = path.join(PHOTO_DIR, slot);
-    if (!PHOTO_SLOTS.includes(slot) || !fs.existsSync(file)) return send(res, 404, { error: 'Sem foto.' });
+    if (!slotOk(slot) || !fs.existsSync(file)) return send(res, 404, { error: 'Sem foto.' });
     const buf = fs.readFileSync(file);
     res.writeHead(200, { 'Content-Type': sniffImage(buf) || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
     return res.end(buf);
@@ -391,6 +510,7 @@ async function handle(req, res) {
       address: clean(b.address, 200),
       forWhom: clean(b.forWhom, 80),
       notes: clean(b.notes, 600),
+      plan,
     };
     const errors = {};
     if (data.name.length < 2) errors.name = 'Escreva seu nome.';
@@ -412,8 +532,13 @@ async function handle(req, res) {
         const startDay = slots[0].slice(0, 10);
         const r = q.insertPackage.run(now, data.name, data.phone, data.service, need, startDay, addDays(startDay, PACKAGE_WINDOW_DAYS - 1), data.address);
         packageId = Number(r.lastInsertRowid);
+        const pp = priceOf(data.service, data.plan);
+        if (pp != null) db.prepare(`UPDATE packages SET price = ? WHERE id = ?`).run(pp, packageId);
       }
-      for (const s of slots) q.insert.run(now, data.name, data.phone, data.service, s, data.address, data.forWhom, data.notes, packageId);
+      for (const s of slots) {
+        const r = q.insert.run(now, data.name, data.phone, data.service, s, data.address, data.forWhom, data.notes, packageId);
+        if (!packageId) { const sp = priceOf(data.service, 'avulso'); if (sp != null) db.prepare(`UPDATE bookings SET price = ? WHERE id = ?`).run(sp, Number(r.lastInsertRowid)); }
+      }
       db.exec('COMMIT');
       return send(res, 201, { ok: true, packageId, slots });
     } catch (e) { db.exec('ROLLBACK'); throw e; }
@@ -433,10 +558,10 @@ async function handle(req, res) {
   if (p.startsWith('/api/admin/')) {
     if (!validSession(cookies(req).gabi_session)) return send(res, 401, { error: 'Entre com a senha do painel.' });
 
-    const photoAdmin = p.match(/^\/api\/admin\/fotos\/([a-z]+)$/);
+    const photoAdmin = p.match(/^\/api\/admin\/fotos\/([a-z0-9]+)$/);
     if (photoAdmin) {
       const slot = photoAdmin[1];
-      if (!PHOTO_SLOTS.includes(slot)) return send(res, 404, { error: 'Foto desconhecida.' });
+      if (!slotOk(slot)) return send(res, 404, { error: 'Foto desconhecida.' });
       const file = path.join(PHOTO_DIR, slot);
       if (m === 'PUT') {
         let buf;
@@ -446,6 +571,80 @@ async function handle(req, res) {
         return send(res, 200, { ok: true });
       }
       if (m === 'DELETE') { fs.rmSync(file, { force: true }); return send(res, 200, { ok: true }); }
+    }
+
+    if (p === '/api/admin/prices' && m === 'GET') return send(res, 200, { services: SERVICES.map((sv) => ({ id: sv.id, name: sv.name, group: sv.group })), prices: pricesMap() });
+    if (p === '/api/admin/prices' && m === 'PUT') {
+      const b = await readJson(req);
+      if (!SERVICE_IDS.has(b.service) || !Object.hasOwn(PLANS, b.plan)) return send(res, 422, { error: 'Atendimento ou plano inválido.' });
+      const v = parseMoney(b.price);
+      if (Number.isNaN(v)) return send(res, 422, { error: 'Valor inválido.' });
+      db.prepare(`INSERT INTO prices (service, plan, price) VALUES (?,?,?) ON CONFLICT(service, plan) DO UPDATE SET price = excluded.price`).run(b.service, b.plan, v);
+      return send(res, 200, { ok: true });
+    }
+
+    if (p === '/api/admin/products' && m === 'GET') {
+      const rows = db.prepare(`SELECT * FROM products ORDER BY active DESC, category, name`).all();
+      return send(res, 200, { categories: CATEGORIES, products: rows.map((r) => ({ ...productPublic(r), active: !!r.active, ml_url: r.ml_url || '', shopee_url: r.shopee_url || '' })) });
+    }
+    if (p === '/api/admin/products' && m === 'POST') {
+      const b = await readJson(req);
+      const price = parseMoney(b.price);
+      if (clean(b.name, 90).length < 2 || price === null || Number.isNaN(price)) return send(res, 422, { error: 'Informe nome e preço do produto.' });
+      const cat = CATEGORIES.some((c) => c.id === b.category) ? b.category : CATEGORIES[0].id;
+      const r = db.prepare(`INSERT INTO products (created_at, name, category, description, price, stock, active) VALUES (?,?,?,?,?,?,1)`)
+        .run(new Date().toISOString(), clean(b.name, 90), cat, clean(b.description, 400), price, Math.max(0, Math.floor(Number(b.stock) || 0)));
+      return send(res, 201, { id: Number(r.lastInsertRowid) });
+    }
+    const prodM = p.match(/^\/api\/admin\/products\/(\d+)$/);
+    if (prodM) {
+      const id = Number(prodM[1]);
+      const cur = db.prepare(`SELECT * FROM products WHERE id = ?`).get(id);
+      if (!cur) return send(res, 404, { error: 'Produto não encontrado.' });
+      if (m === 'DELETE') { db.prepare(`DELETE FROM products WHERE id = ?`).run(id); fs.rmSync(path.join(PHOTO_DIR, `p${id}`), { force: true }); return send(res, 200, { ok: true }); }
+      if (m === 'PATCH') {
+        const b = await readJson(req);
+        const next = { ...cur };
+        if (b.name !== undefined) { next.name = clean(b.name, 90); if (next.name.length < 2) return send(res, 422, { error: 'Nome muito curto.' }); }
+        if (b.category !== undefined && CATEGORIES.some((c) => c.id === b.category)) next.category = b.category;
+        if (b.description !== undefined) next.description = clean(b.description, 400);
+        if (b.price !== undefined) { const v = parseMoney(b.price); if (v === null || Number.isNaN(v)) return send(res, 422, { error: 'Preço inválido.' }); next.price = v; }
+        if (b.stock !== undefined) next.stock = Math.max(0, Math.floor(Number(b.stock) || 0));
+        if (b.active !== undefined) next.active = b.active ? 1 : 0;
+        if (b.ml_url !== undefined) next.ml_url = clean(b.ml_url, 300);
+        if (b.shopee_url !== undefined) next.shopee_url = clean(b.shopee_url, 300);
+        db.prepare(`UPDATE products SET name=?, category=?, description=?, price=?, stock=?, active=?, ml_url=?, shopee_url=? WHERE id=?`)
+          .run(next.name, next.category, next.description, next.price, next.stock, next.active, next.ml_url, next.shopee_url, id);
+        return send(res, 200, { ok: true });
+      }
+    }
+
+    if (p === '/api/admin/orders' && m === 'GET') {
+      const st = url.searchParams.get('status') || '';
+      const term = fold(url.searchParams.get('q') || '');
+      let rows = db.prepare(`SELECT * FROM orders ORDER BY id DESC`).all();
+      const counts = {};
+      for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
+      if (st) rows = rows.filter((r) => st.split(',').includes(r.status));
+      if (term) rows = rows.filter((r) => fold(`${r.name} ${r.phone}`).includes(term));
+      return send(res, 200, { orders: rows.map((r) => ({ ...r, items: JSON.parse(r.items) })), counts });
+    }
+    const ordM = p.match(/^\/api\/admin\/orders\/(\d+)$/);
+    if (ordM && m === 'PATCH') {
+      const b = await readJson(req);
+      const cur = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(Number(ordM[1]));
+      if (!cur) return send(res, 404, { error: 'Pedido não encontrado.' });
+      if (!ORDER_STATUSES.includes(b.status)) return send(res, 422, { error: 'Situação inválida.' });
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        // Cancelar devolve os itens ao estoque; reabrir um cancelado tira de novo.
+        const items = JSON.parse(cur.items);
+        if (b.status === 'cancelado' && cur.status !== 'cancelado') for (const l of items) db.prepare(`UPDATE products SET stock = stock + ? WHERE id = ?`).run(l.qty, l.id);
+        if (cur.status === 'cancelado' && b.status !== 'cancelado') for (const l of items) db.prepare(`UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?`).run(l.qty, l.id);
+        db.prepare(`UPDATE orders SET status = ?, updated_at = ? WHERE id = ?`).run(b.status, new Date().toISOString(), cur.id);
+        db.exec('COMMIT');
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+      return send(res, 200, { ok: true });
     }
 
     if (p === '/api/admin/me') return send(res, 200, { ok: true });
@@ -537,8 +736,8 @@ async function handle(req, res) {
       }
       let price = pkg.price;
       if (b.price !== undefined) {
-        const v = b.price === null || b.price === '' ? null : Number(String(b.price).replace(',', '.'));
-        if (v !== null && (!Number.isFinite(v) || v < 0)) return send(res, 422, { error: 'Valor inválido.' });
+        const v = parseMoney(b.price);
+        if (Number.isNaN(v)) return send(res, 422, { error: 'Valor inválido.' });
         price = v;
       }
       let paid = pkg.paid, paidAt = pkg.paid_at;

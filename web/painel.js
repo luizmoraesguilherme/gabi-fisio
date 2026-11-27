@@ -94,13 +94,16 @@
 
   function refresh() {
     updateCount();
-    ({ pedidos: loadPedidos, agenda: loadAgenda, sessoes: loadSessoes, clientes: loadClientes, pacotes: loadPacotes, fotos: loadFotos })[S.view]();
+    ({ pedidos: loadPedidos, agenda: loadAgenda, sessoes: loadSessoes, clientes: loadClientes, pacotes: loadPacotes, precos: loadPrecos, loja: loadLoja, fotos: loadFotos })[S.view]();
   }
   async function updateCount() {
     try {
       const [b, p] = await Promise.all([api('/api/admin/bookings?status=pendente&kind=avulsa&limit=1'), api('/api/admin/packages?status=pendente')]);
       const n = b.total + p.summary.pending;
       $('#count-pendente').textContent = n ? `(${n})` : '';
+      const o = await api('/api/admin/orders?status=novo');
+      const no = o.orders.length;
+      $('#count-loja').textContent = no ? `(${no})` : '';
     } catch {}
   }
 
@@ -462,6 +465,135 @@
   }
 
 
+
+  // ---------- Preços ----------
+  const PLAN_COLS = [['avulso', 'Sessão avulsa'], ['pacote4', 'Pacote de 4 sessões'], ['pacote8', 'Pacote de 8 sessões']];
+  const moneyIn = (v) => (v != null ? v.toFixed(2).replace('.', ',') : '');
+  async function loadPrecos() {
+    try {
+      const { services: list, prices } = await api('/api/admin/prices');
+      const groups = { reabilitacao: 'Reabilitação', 'bem-estar': 'Bem-estar' };
+      $('#precos-tabela').innerHTML = `<table class="tbl tbl-precos"><thead><tr><th>Atendimento</th>${PLAN_COLS.map(([, n]) => `<th>${n}</th>`).join('')}</tr></thead><tbody>
+        ${Object.entries(groups).map(([g, gname]) => `<tr class="grp"><th colspan="4">${gname}</th></tr>` + list.filter((s) => s.group === g).map((s) => `<tr>
+          <td data-label="Atendimento"><b>${esc(s.name)}</b></td>
+          ${PLAN_COLS.map(([plan, pname]) => `<td data-label="${pname}"><label class="money"><span>R$</span><input inputmode="decimal" data-price-svc="${s.id}" data-price-plan="${plan}" value="${moneyIn(prices[s.id][plan])}" placeholder="não definido" aria-label="${esc(s.name)}, ${pname}"></label></td>`).join('')}
+        </tr>`).join('')).join('')}</tbody></table>`;
+    } catch (err) { fail(err); }
+  }
+  document.addEventListener('change', async (e) => {
+    const inp = e.target.closest('[data-price-svc]');
+    if (!inp) return;
+    try {
+      await api('/api/admin/prices', { method: 'PUT', body: JSON.stringify({ service: inp.dataset.priceSvc, plan: inp.dataset.pricePlan, price: inp.value.trim() }) });
+      setStatus('Preço salvo. Já aparece no site.', true);
+    } catch (err) { fail(err); }
+  });
+
+  // ---------- Loja ----------
+  const ORDER_LABEL = { novo: 'Novo', confirmado: 'Confirmado', pago: 'Pago', enviado: 'Enviado', entregue: 'Entregue', cancelado: 'Cancelado' };
+  const ORDER_NEXT = { novo: ['confirmado', 'Confirmar e avisar'], confirmado: ['pago', 'Marcar como pago'], pago: ['enviado', 'Marcar como enviado'], enviado: ['entregue', 'Marcar como entregue'] };
+  const L = { sub: 'pedidos', oq: '', ost: 'novo,confirmado,pago,enviado', cats: [] };
+  $$('[data-sub]').forEach((b) => b.addEventListener('click', () => { L.sub = b.dataset.sub; loadLoja(); }));
+  $('#o-q').addEventListener('input', debounce((e) => { L.oq = e.target.value.trim(); loadLoja(); }));
+  $('#o-status').addEventListener('change', (e) => { L.ost = e.target.value; loadLoja(); });
+  function loadLoja() {
+    $$('[data-sub]').forEach((b) => (b.dataset.sub === L.sub ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
+    $('#loja-pedidos').hidden = L.sub !== 'pedidos';
+    $('#loja-produtos').hidden = L.sub !== 'produtos';
+    return L.sub === 'pedidos' ? loadOrders() : loadProducts();
+  }
+  function orderCard(o) {
+    const [day, ] = o.created_at.split('T');
+    const next = ORDER_NEXT[o.status];
+    const msg = o.status === 'novo'
+      ? `Olá, ${firstName(o.name)}! Aqui é a Gabriela. Recebi seu pedido da loja: ${o.items.map((l) => `${l.qty}x ${l.name}`).join(', ')}. Total ${brl.format(o.total)}. Como prefere pagar?`
+      : o.status === 'pago' ? `Olá, ${firstName(o.name)}! Seu pedido da loja foi enviado.` : '';
+    return `<article class="order status-${o.status}">
+      <header><h3><b>#${o.id}</b> ${esc(o.name)} <span class="tag tag-o-${o.status}">${ORDER_LABEL[o.status]}</span></h3>
+        <p class="muted">${shortDay(day)} · ${o.delivery === 'entrega' ? 'Entrega' : 'Retirada ou próxima sessão'}${o.address ? `, ${esc(o.address)}` : ''}</p></header>
+      <ul class="order-items">${o.items.map((l) => `<li><span>${l.qty}x ${esc(l.name)}</span><span>${brl.format(l.price * l.qty)}</span></li>`).join('')}</ul>
+      <p class="order-total"><span>Total</span><b>${brl.format(o.total)}</b></p>
+      ${o.notes ? `<p class="b-notes">${esc(o.notes)}</p>` : ''}
+      <footer class="pkg-actions">
+        ${next ? `<button type="button" class="btn btn-primary btn-sm" data-order="${o.id}" data-ost="${next[0]}" ${o.status === 'novo' ? `data-wa="${esc(wa(o.phone, msg))}"` : ''}>${next[1]}</button>` : ''}
+        <a class="link-btn" href="${esc(wa(o.phone, o.status === 'enviado' ? '' : ''))}" target="_blank" rel="noopener">Abrir conversa</a>
+        ${o.status !== 'cancelado' && o.status !== 'entregue' ? `<button type="button" class="link-btn link-danger" data-order="${o.id}" data-ost="cancelado">Cancelar pedido</button>` : ''}
+        ${o.status === 'cancelado' ? `<button type="button" class="link-btn" data-order="${o.id}" data-ost="novo">Reabrir</button>` : ''}
+      </footer></article>`;
+  }
+  async function loadOrders() {
+    try {
+      const { orders, counts } = await api(`/api/admin/orders${qs({ status: L.ost, q: L.oq })}`);
+      $('#o-bar').innerHTML = `<b>${plural(orders.length, 'pedido', 'pedidos')}</b> ${Object.entries(counts).map(([s, n]) => `<span class="tag">${n} ${ORDER_LABEL[s].toLowerCase()}</span>`).join('')}`;
+      $('#o-list').innerHTML = orders.length ? orders.map(orderCard).join('') : '<p class="empty">Nenhum pedido da loja por aqui. Quando alguém pedir pelo site, ele aparece nesta lista.</p>';
+    } catch (err) { fail(err); }
+  }
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-order]');
+    if (!b) return;
+    if (b.dataset.ost === 'cancelado' && !confirm('Cancelar este pedido? Os itens voltam para o estoque.')) return;
+    const win = b.dataset.wa ? window.open(b.dataset.wa, '_blank', 'noopener') : null;
+    b.disabled = true;
+    try { await api(`/api/admin/orders/${b.dataset.order}`, { method: 'PATCH', body: JSON.stringify({ status: b.dataset.ost }) }); refresh(); }
+    catch (err) { if (win) win.close(); b.disabled = false; fail(err); }
+  });
+
+  async function loadProducts() {
+    try {
+      const { categories, products } = await api('/api/admin/products');
+      L.cats = categories;
+      const sel = $('#prod-cat');
+      if (!sel.options.length) categories.forEach((c) => sel.add(new Option(c.name, c.id)));
+      $('#pr-bar').innerHTML = `<b>${plural(products.length, 'produto', 'produtos')}</b>`;
+      $('#pr-list').innerHTML = products.length ? products.map((p) => productRow(p, categories)).join('') : '<p class="empty">Nenhum produto ainda. Use "Novo produto" para cadastrar o primeiro.</p>';
+    } catch (err) { fail(err); }
+  }
+  function productRow(p, cats) {
+    return `<article class="pa${p.active ? '' : ' is-off'}">
+      <div class="pa-img">${p.photo ? `<img src="/api/fotos/p${p.id}?v=${p.photo}" alt="">` : '<span>Sem foto</span>'}
+        <label class="link-btn">${p.photo ? 'Trocar foto' : 'Enviar foto'}<input type="file" accept="image/*" hidden data-foto="p${p.id}" data-ratio="1"></label>
+        ${p.photo ? `<button type="button" class="link-btn link-danger" data-fotodel="p${p.id}">Remover foto</button>` : ''}</div>
+      <div class="pa-main">
+        <label class="field"><span>Nome</span><input data-pf="name" data-pid="${p.id}" value="${esc(p.name)}" maxlength="90"></label>
+        <label class="field"><span>Descrição</span><input data-pf="description" data-pid="${p.id}" value="${esc(p.description)}" maxlength="400"></label>
+        <div class="pa-row">
+          <label class="field"><span>Categoria</span><select data-pf="category" data-pid="${p.id}">${cats.map((c) => `<option value="${c.id}"${c.id === p.category ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+          <label class="field"><span>Preço (R$)</span><input data-pf="price" data-pid="${p.id}" inputmode="decimal" value="${moneyIn(p.price)}"></label>
+          <label class="field"><span>Estoque</span><input data-pf="stock" data-pid="${p.id}" inputmode="numeric" value="${p.stock}"></label>
+        </div>
+        <div class="pa-row">
+          <label class="field"><span>Link Mercado Livre <i>futuro</i></span><input data-pf="ml_url" data-pid="${p.id}" value="${esc(p.ml_url)}" placeholder="https://"></label>
+          <label class="field"><span>Link Shopee <i>futuro</i></span><input data-pf="shopee_url" data-pid="${p.id}" value="${esc(p.shopee_url)}" placeholder="https://"></label>
+        </div>
+        <div class="pkg-actions">
+          <label class="check"><input type="checkbox" data-pf="active" data-pid="${p.id}"${p.active ? ' checked' : ''}> Aparece na loja</label>
+          ${p.stock <= 3 ? `<span class="tag tag-pendente">${p.stock === 0 ? 'Sem estoque' : 'Estoque baixo'}</span>` : ''}
+          <button type="button" class="link-btn link-danger" data-pdel="${p.id}">Excluir produto</button>
+        </div>
+      </div></article>`;
+  }
+  document.addEventListener('change', async (e) => {
+    const f = e.target.closest('[data-pf]');
+    if (!f) return;
+    const val = f.type === 'checkbox' ? f.checked : f.value.trim();
+    try { await api(`/api/admin/products/${f.dataset.pid}`, { method: 'PATCH', body: JSON.stringify({ [f.dataset.pf]: val }) }); setStatus('Produto salvo.', true); if (['price', 'stock', 'active'].includes(f.dataset.pf)) loadProducts(); }
+    catch (err) { fail(err); loadProducts(); }
+  });
+  document.addEventListener('click', async (e) => {
+    const d = e.target.closest('[data-pdel]');
+    if (!d || !confirm('Excluir este produto da loja? Pedidos antigos continuam no histórico.')) return;
+    await api(`/api/admin/products/${d.dataset.pdel}`, { method: 'DELETE' }).catch(fail);
+    loadProducts();
+  });
+  $('#prod-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    try {
+      await api('/api/admin/products', { method: 'POST', body: JSON.stringify({ name: f.name.value, category: f.category.value, price: f.price.value, stock: f.stock.value, description: f.description.value }) });
+      f.reset(); f.closest('details').open = false; setStatus('Produto cadastrado. Já aparece na loja.', true); loadProducts();
+    } catch (err) { fail(err); }
+  });
+
   // ---------- Fotos do site ----------
   const FOTOS = [
     { slot: 'retrato', titulo: 'Retrato (página inicial)', dica: 'Foto em pé, de preferência com a Gabi de frente ou levemente de lado.', ratio: 4 / 5 },
@@ -511,14 +643,14 @@
       const r = await fetch(`/api/admin/fotos/${inp.dataset.foto}`, { method: 'PUT', body: blob, headers: { 'Content-Type': 'image/jpeg' }, credentials: 'same-origin' });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Não consegui enviar.');
       setStatus('Foto atualizada. Já aparece no site.', true);
-      loadFotos();
+      refresh();
     } catch (err) { setStatus(err.message); }
   });
   document.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-fotodel]');
     if (!b || !confirm('Remover esta foto do site?')) return;
     await api(`/api/admin/fotos/${b.dataset.fotodel}`, { method: 'DELETE' }).catch(fail);
-    loadFotos();
+    refresh();
   });
 
   // ---------- Início ----------

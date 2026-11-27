@@ -74,10 +74,21 @@
         li.innerHTML = '<strong></strong><span></span>';
         li.querySelector('strong').textContent = s.name;
         li.querySelector('span').textContent = s.blurb;
+        const pr = s.prices || {};
+        const bits = [pr.avulso != null && `Sessão ${brl(pr.avulso)}`, pr.pacote4 != null && `4 sessões ${brl(pr.pacote4)}`, pr.pacote8 != null && `8 sessões ${brl(pr.pacote8)}`].filter(Boolean);
+        if (bits.length) { const p = document.createElement('p'); p.className = 'svc-price'; p.textContent = bits.join('  ·  '); li.append(p); }
         ul.append(li);
       }
     }
     for (const s of state.services) sel.add(new Option(s.name, s.id));
+  }
+  const brl = (n) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const priceFor = (plan = state.plan) => { const s = state.services.find((x) => x.id === $('#service').value); return s && s.prices ? s.prices[plan] : null; };
+  function renderPlanPrices() {
+    document.querySelectorAll('[data-plan-price]').forEach((el) => {
+      const v = priceFor(el.dataset.planPrice);
+      el.textContent = v != null ? brl(v) : '';
+    });
   }
   const serviceName = () => (state.services.find((s) => s.id === $('#service').value) || {}).name || '';
 
@@ -182,6 +193,7 @@
   }
 
   function renderSummary() {
+    renderPlanPrices();
     const n = need();
     const svc = serviceName();
     let sess;
@@ -198,6 +210,7 @@
     $('#summary-body').innerHTML = `<dl class="sum">
       <div><dt>Atendimento</dt><dd>${svc ? svc : '<span class="sum-empty">Ainda não escolhido</span>'}</dd></div>
       <div><dt>Plano</dt><dd>${PLAN_NAME[state.plan]}</dd></div>
+      ${priceFor() != null ? `<div><dt>Valor</dt><dd>${brl(priceFor())}${n > 1 ? '' : ''}</dd></div>` : ''}
     </dl>${meter}${sess}`;
   }
 

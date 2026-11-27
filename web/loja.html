@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Loja da Gabriela</title>
+  <meta name="description" content="Óleos essenciais, acessórios de massagem, fitas e faixas: os mesmos produtos que a Gabriela usa nas sessões, para você ter em casa.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Schibsted+Grotesk:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="loja">
+  <a class="skip" href="#produtos">Pular para os produtos</a>
+  <header class="top">
+    <a class="brand" href="./">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="12" width="26" height="8" rx="2" transform="rotate(-24 16 16)" fill="var(--fita-azul)"/><rect x="3" y="12" width="26" height="8" rx="2" transform="rotate(24 16 16)" fill="var(--fita-rosa)" opacity=".9"/></svg>
+      <span>Gabriela <small>fisioterapia em casa</small></span>
+    </a>
+    <nav aria-label="Principal">
+      <a href="./#quem-sou-eu">Quem sou eu</a>
+      <a href="./#atendimentos">Atendimentos</a>
+      <a href="loja.html" aria-current="page">Loja</a>
+      <a class="nav-cta" href="./#agendar">Agendar</a>
+      <a class="bag-link" href="#sacola">Sacola <span id="bag-count" class="bag-count">0</span></a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="loja-hero">
+      <div class="loja-hero-in">
+        <h1>Para continuar o cuidado em casa.</h1>
+        <p class="lede">Óleos, fitas e acessórios que a Gabriela usa e indica nas sessões. Você pede aqui e ela combina a entrega ou leva na próxima visita.</p>
+      </div>
+    </section>
+
+    <div class="loja-layout">
+      <section id="produtos" aria-labelledby="prod-titulo">
+        <h2 id="prod-titulo" class="sr">Produtos</h2>
+        <div class="chips" id="chips" role="group" aria-label="Categorias"></div>
+        <div class="prod-grid" id="prod-grid" aria-live="polite"><p class="agenda-loading">Carregando produtos…</p></div>
+      </section>
+
+      <aside class="bag" id="sacola" aria-labelledby="bag-title">
+        <h2 id="bag-title">Sua sacola</h2>
+        <div id="bag-body"></div>
+        <form id="order-form" class="order-form" novalidate hidden>
+          <label class="field"><span>Seu nome</span><input name="name" autocomplete="name" required maxlength="80"><em class="error" data-for="name"></em></label>
+          <label class="field"><span>WhatsApp com DDD</span><input name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(12) 99999-9999" required maxlength="30"><em class="error" data-for="phone"></em></label>
+          <fieldset class="deliv">
+            <legend>Como você quer receber?</legend>
+            <label class="plan"><input type="radio" name="delivery" value="retirada" checked><span><strong>Na próxima sessão ou retirada</strong><small>A Gabriela combina com você.</small></span></label>
+            <label class="plan"><input type="radio" name="delivery" value="entrega"><span><strong>Entrega no endereço</strong><small>Combinamos o frete pelo WhatsApp.</small></span></label>
+          </fieldset>
+          <label class="field" id="addr-field" hidden><span>Endereço de entrega</span><input name="address" autocomplete="street-address" maxlength="200" placeholder="Rua, número, bairro e cidade"><em class="error" data-for="address"></em></label>
+          <label class="field"><span>Recado <i>opcional</i></span><input name="notes" maxlength="400"></label>
+          <label class="hp" aria-hidden="true">Site <input name="website" tabindex="-1" autocomplete="off"></label>
+          <button class="btn btn-primary" type="submit" id="order-submit">Enviar pedido</button>
+          <p class="form-status" id="order-status" role="status"></p>
+          <p class="bag-note">Você não paga agora. A Gabriela confirma o pedido e combina o pagamento com você.</p>
+        </form>
+        <div class="done" id="order-done" hidden tabindex="-1">
+          <h3>Pedido enviado</h3>
+          <p id="order-done-text"></p>
+          <a class="btn btn-quiet js-whatsapp" id="order-wa" href="#" hidden>Avisar no WhatsApp</a>
+          <button class="btn btn-quiet" type="button" id="order-new">Fazer outro pedido</button>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-in">
+      <div>
+        <p class="foot-brand"><strong>Gabriela</strong> fisioterapia em casa</p>
+        <p>Fisioterapia e massagem a domicílio.</p>
+      </div>
+      <nav class="foot-links" aria-label="Rodapé">
+        <a href="./">Início</a>
+        <a href="./#atendimentos">Atendimentos</a>
+        <a href="./#agendar">Agendar</a>
+        <a class="js-whatsapp" href="#" hidden>WhatsApp</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="loja.js"></script>
+</body>
+</html>

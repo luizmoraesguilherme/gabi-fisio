@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const WEB_FILES = ['index.html', 'painel.html', 'styles.css', 'app.js', 'painel.js', 'config.js', 'favicon.svg'];
+const WEB_FILES = ['index.html', 'painel.html', 'styles.css', 'app.js', 'painel.js', 'loja.html', 'loja.js', 'config.js', 'favicon.svg'];
 const HOST_PORT = process.env.HOST_PORT || '3100';
 
 let commit = 'local';
@@ -25,7 +25,7 @@ const configs = {
 // Carimba JS e CSS com o hash do conteúdo: arquivo novo = URL nova, então o navegador
 // nunca mistura um HTML novo com um script antigo guardado em cache.
 const ver = (f) => createHash('sha256').update(readFileSync(join(root, 'web', f))).digest('hex').slice(0, 8);
-const stamp = (html) => html.replace(/(src|href)="(styles\.css|app\.js|painel\.js|config\.js)"/g, (_, attr, f) => `${attr}="${f}?v=${ver(f)}"`);
+const stamp = (html) => html.replace(/(src|href)="(styles\.css|app\.js|painel\.js|loja\.js|config\.js)"/g, (_, attr, f) => `${attr}="${f}?v=${ver(f)}"`);
 for (const f of WEB_FILES) {
   const body = readFileSync(join(root, 'web', f), 'utf8');
   configs[cfgName(f)] = f.endsWith('.html') ? stamp(body) : body;

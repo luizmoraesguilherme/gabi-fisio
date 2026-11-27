@@ -42,6 +42,8 @@
         <button type="button" data-view="sessoes">Sessões</button>
         <button type="button" data-view="clientes">Clientes</button>
         <button type="button" data-view="pacotes">Pacotes</button>
+        <button type="button" data-view="precos">Preços</button>
+        <button type="button" data-view="loja">Loja <span class="count" id="count-loja"></span></button>
         <button type="button" data-view="fotos">Fotos do site</button>
       </nav>
       <p class="form-status" id="panel-status" role="status"></p>
@@ -166,6 +168,55 @@
         </div>
         <div class="result-bar" id="p-bar"></div>
         <div id="pac-list" class="pac-list" aria-live="polite"></div>
+      </section>
+
+      <!-- Preços dos atendimentos -->
+      <section class="view" id="view-precos" hidden aria-labelledby="precos-titulo">
+        <div class="panel-head"><h1 id="precos-titulo">Preços dos atendimentos</h1></div>
+        <p class="fotos-help">Os valores aparecem no site e já entram no pacote ou na sessão quando o cliente faz o pedido. Deixe em branco para não mostrar o preço. No pacote, informe o valor total do pacote.</p>
+        <div id="precos-tabela"></div>
+      </section>
+
+      <!-- Loja: produtos e pedidos -->
+      <section class="view" id="view-loja" hidden aria-labelledby="loja-titulo">
+        <div class="panel-head"><h1 id="loja-titulo">Loja</h1></div>
+        <nav class="subviews" aria-label="Loja">
+          <button type="button" data-sub="pedidos" aria-current="page">Pedidos da loja</button>
+          <button type="button" data-sub="produtos">Produtos</button>
+        </nav>
+        <div id="loja-pedidos">
+          <div class="filters" role="search" aria-label="Filtrar pedidos da loja">
+            <label class="field f-q"><span>Cliente</span><input type="search" id="o-q" placeholder="Nome ou telefone" autocomplete="off"></label>
+            <label class="field"><span>Situação</span>
+              <select id="o-status">
+                <option value="novo,confirmado,pago,enviado">Em andamento</option>
+                <option value="novo">Novos</option>
+                <option value="confirmado">Confirmados</option>
+                <option value="pago">Pagos</option>
+                <option value="enviado">Enviados</option>
+                <option value="entregue">Entregues</option>
+                <option value="cancelado">Cancelados</option>
+                <option value="">Todos</option>
+              </select></label>
+          </div>
+          <div class="result-bar" id="o-bar"></div>
+          <div id="o-list"></div>
+        </div>
+        <div id="loja-produtos" hidden>
+          <details class="novo-prod">
+            <summary class="btn btn-primary btn-sm">Novo produto</summary>
+            <form id="prod-form" class="prod-form">
+              <label class="field"><span>Nome</span><input name="name" required maxlength="90"></label>
+              <label class="field"><span>Categoria</span><select name="category" id="prod-cat"></select></label>
+              <label class="field"><span>Preço (R$)</span><input name="price" inputmode="decimal" required placeholder="0,00"></label>
+              <label class="field"><span>Estoque</span><input name="stock" inputmode="numeric" value="0"></label>
+              <label class="field prod-wide"><span>Descrição</span><input name="description" maxlength="400"></label>
+              <button class="btn btn-primary" type="submit">Salvar produto</button>
+            </form>
+          </details>
+          <div class="result-bar" id="pr-bar"></div>
+          <div id="pr-list" class="prod-admin"></div>
+        </div>
       </section>
 
       <!-- Fotos do site -->
