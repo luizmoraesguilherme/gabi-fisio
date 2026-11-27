@@ -88,75 +88,85 @@
     <section class="section booking" id="agendar" aria-labelledby="agendar-titulo">
       <div class="section-head">
         <h2 id="agendar-titulo">Pedir um atendimento</h2>
-        <p>O horário fica reservado para você até a Gabriela confirmar.</p>
+        <p>Escolha o atendimento, os dias e deixe seus dados. O horário fica reservado até a Gabriela confirmar.</p>
       </div>
 
-      <form id="booking-form" class="booking-form" novalidate>
-        <fieldset>
-          <legend>Atendimento</legend>
-          <label class="field">
-            <span>Qual atendimento?</span>
-            <select name="service" id="service" required>
-              <option value="">Escolha</option>
-            </select>
-            <em class="error" data-for="service"></em>
-          </label>
-        </fieldset>
-
-        <fieldset>
-          <legend>Sessão avulsa ou pacote</legend>
-          <div class="plans" role="radiogroup" aria-label="Plano">
-            <label class="plan"><input type="radio" name="plan" value="avulso" checked><span><strong>Sessão avulsa</strong><small>Uma visita.</small></span></label>
-            <label class="plan"><input type="radio" name="plan" value="pacote4"><span><strong>Pacote de 4 sessões</strong><small>Uma por semana, em média.</small></span></label>
-            <label class="plan"><input type="radio" name="plan" value="pacote8"><span><strong>Pacote de 8 sessões</strong><small>Duas por semana, em média.</small></span></label>
-          </div>
-          <p class="plan-rule" id="plan-rule" hidden>No pacote, você já marca todas as sessões agora. Elas precisam caber em 30 dias contados a partir da primeira, com no máximo uma por dia.</p>
-        </fieldset>
-
-        <fieldset>
-          <legend id="slot-legend">Dia e horário</legend>
-          <div class="day-picker" id="day-picker" role="radiogroup" aria-label="Dia"></div>
-          <div class="time-picker" id="time-picker" role="radiogroup" aria-label="Horário"></div>
-          <p class="picked" id="picked" aria-live="polite">Nenhum horário escolhido.</p>
-          <ul class="chosen" id="chosen"></ul>
-          <em class="error" data-for="slot"></em>
-        </fieldset>
-
-        <fieldset>
-          <legend>Seus dados</legend>
-          <div class="grid-2">
+      <div class="book-layout" id="book-layout">
+        <form id="booking-form" class="booking-form" novalidate>
+          <fieldset class="step">
+            <legend><span class="step-n" aria-hidden="true">1</span>Atendimento</legend>
             <label class="field">
-              <span>Seu nome</span>
-              <input name="name" autocomplete="name" required maxlength="80">
-              <em class="error" data-for="name"></em>
+              <span>Qual atendimento?</span>
+              <select name="service" id="service" required>
+                <option value="">Escolha</option>
+              </select>
+              <em class="error" data-for="service"></em>
+            </label>
+            <div class="plans" role="radiogroup" aria-label="Sessão avulsa ou pacote">
+              <label class="plan"><input type="radio" name="plan" value="avulso" checked><span><strong>Sessão avulsa</strong><small>Uma visita.</small></span></label>
+              <label class="plan"><input type="radio" name="plan" value="pacote4"><span><strong>Pacote de 4 sessões</strong><small>Em média uma por semana.</small></span></label>
+              <label class="plan"><input type="radio" name="plan" value="pacote8"><span><strong>Pacote de 8 sessões</strong><small>Em média duas por semana.</small></span></label>
+            </div>
+            <p class="plan-rule" id="plan-rule" hidden>No pacote, você marca todas as sessões agora. Elas precisam caber em 30 dias a partir da primeira, com no máximo uma por dia.</p>
+          </fieldset>
+
+          <fieldset class="step" id="step-dates">
+            <legend><span class="step-n" aria-hidden="true">2</span><span id="slot-legend">Dia e horário</span></legend>
+            <div class="datepick">
+              <div class="cal" id="cal">
+                <div class="cal-bar">
+                  <button type="button" class="cal-arrow" id="cal-prev" aria-label="Mês anterior"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4 6.5 10l6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                  <label class="cal-jump"><span class="sr">Ir para o mês</span><select id="cal-month"></select></label>
+                  <button type="button" class="cal-arrow" id="cal-next" aria-label="Próximo mês"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 4 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                </div>
+                <div class="cal-weekdays" aria-hidden="true"><span>dom</span><span>seg</span><span>ter</span><span>qua</span><span>qui</span><span>sex</span><span>sáb</span></div>
+                <div class="cal-days" id="cal-days"></div>
+                <p class="cal-key"><i class="k-free"></i>Dia com horário livre <i class="k-pick"></i>Sessão escolhida</p>
+              </div>
+              <div class="times" id="times" aria-live="polite"></div>
+            </div>
+            <button type="button" class="btn btn-quiet" id="suggest" hidden>Sugerir as outras sessões</button>
+            <em class="error" data-for="slot"></em>
+          </fieldset>
+
+          <fieldset class="step">
+            <legend><span class="step-n" aria-hidden="true">3</span>Seus dados</legend>
+            <div class="grid-2">
+              <label class="field">
+                <span>Seu nome</span>
+                <input name="name" autocomplete="name" required maxlength="80">
+                <em class="error" data-for="name"></em>
+              </label>
+              <label class="field">
+                <span>WhatsApp com DDD</span>
+                <input name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(12) 99999-9999" required maxlength="30">
+                <em class="error" data-for="phone"></em>
+              </label>
+            </div>
+            <label class="field">
+              <span>Endereço do atendimento</span>
+              <input name="address" autocomplete="street-address" placeholder="Rua, número, bairro e cidade" required maxlength="200">
+              <em class="error" data-for="address"></em>
             </label>
             <label class="field">
-              <span>WhatsApp com DDD</span>
-              <input name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="(12) 99999-9999" required maxlength="30">
-              <em class="error" data-for="phone"></em>
+              <span>Para quem é o atendimento? <i>opcional</i></span>
+              <input name="forWhom" placeholder="Para mim, minha mãe, meu pai…" maxlength="80">
             </label>
-          </div>
-          <label class="field">
-            <span>Endereço do atendimento</span>
-            <input name="address" autocomplete="street-address" placeholder="Rua, número, bairro e cidade" required maxlength="200">
-            <em class="error" data-for="address"></em>
-          </label>
-          <label class="field">
-            <span>Para quem é o atendimento? <i>opcional</i></span>
-            <input name="forWhom" placeholder="Para mim, minha mãe, meu pai…" maxlength="80">
-          </label>
-          <label class="field">
-            <span>Algo que a Gabriela deva saber? <i>opcional</i></span>
-            <textarea name="notes" rows="3" maxlength="600" placeholder="Cirurgia recente, dores, se a pessoa tem dificuldade para andar…"></textarea>
-          </label>
-          <label class="hp" aria-hidden="true">Site <input name="website" tabindex="-1" autocomplete="off"></label>
-        </fieldset>
+            <label class="field">
+              <span>Algo que a Gabriela deva saber? <i>opcional</i></span>
+              <textarea name="notes" rows="3" maxlength="600" placeholder="Cirurgia recente, dores, se a pessoa tem dificuldade para andar…"></textarea>
+            </label>
+            <label class="hp" aria-hidden="true">Site <input name="website" tabindex="-1" autocomplete="off"></label>
+          </fieldset>
+        </form>
 
-        <div class="form-actions">
-          <button class="btn btn-primary" type="submit" id="submit">Pedir agendamento</button>
+        <aside class="summary" id="summary" aria-labelledby="summary-title">
+          <h3 id="summary-title">Seu pedido</h3>
+          <div id="summary-body"></div>
+          <button class="btn btn-primary" type="submit" form="booking-form" id="submit">Pedir agendamento</button>
           <p class="form-status" id="form-status" role="status"></p>
-        </div>
-      </form>
+        </aside>
+      </div>
 
       <div class="done" id="done" hidden tabindex="-1">
         <h3>Pedido enviado</h3>

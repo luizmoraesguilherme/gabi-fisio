@@ -38,22 +38,36 @@
     <section id="app" hidden>
       <nav class="views" aria-label="Seções do painel">
         <button type="button" data-view="pedidos" aria-current="page">Pedidos <span class="count" id="count-pendente"></span></button>
-        <button type="button" data-view="calendario">Calendário</button>
+        <button type="button" data-view="agenda">Agenda</button>
+        <button type="button" data-view="sessoes">Sessões</button>
+        <button type="button" data-view="clientes">Clientes</button>
         <button type="button" data-view="pacotes">Pacotes</button>
       </nav>
       <p class="form-status" id="panel-status" role="status"></p>
 
+      <!-- Pedidos: tudo que espera uma resposta da Gabriela -->
       <section class="view" id="view-pedidos" aria-labelledby="pedidos-titulo">
+        <div class="panel-head"><h1 id="pedidos-titulo">Pedidos para confirmar</h1></div>
+        <div id="list" aria-live="polite"></div>
+      </section>
+
+      <!-- Agenda: calendário mensal + folgas -->
+      <section class="view" id="view-agenda" hidden aria-labelledby="agenda-titulo">
         <div class="panel-head">
-          <h1 id="pedidos-titulo">Pedidos</h1>
-          <div class="tabs" role="tablist" aria-label="Filtrar pedidos">
-            <button role="tab" data-status="pendente" aria-selected="true">A confirmar</button>
-            <button role="tab" data-status="confirmado" aria-selected="false">Confirmados</button>
-            <button role="tab" data-status="concluido" aria-selected="false">Concluídos</button>
-            <button role="tab" data-status="" aria-selected="false">Todos</button>
+          <h1 id="agenda-titulo">Agenda</h1>
+          <div class="cal-nav">
+            <button type="button" class="btn btn-quiet" id="cal-prev" aria-label="Mês anterior">Anterior</button>
+            <h2 id="cal-month" aria-live="polite"></h2>
+            <button type="button" class="btn btn-quiet" id="cal-next" aria-label="Próximo mês">Próximo</button>
+            <button type="button" class="link-btn" id="cal-today">Hoje</button>
           </div>
         </div>
-        <div id="list" class="bookings" aria-live="polite"></div>
+        <div class="cal-tools">
+          <p class="cal-legend"><span class="key key-avulso"></span>Avulsa <span class="key key-pacote"></span>De pacote <span class="key key-feito"></span>Concluída <span class="key key-pend"></span>A confirmar</p>
+          <label class="check"><input type="checkbox" id="cal-pend"> Mostrar também as a confirmar</label>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-detail" id="cal-detail" hidden tabindex="-1"></div>
 
         <section class="blocks" aria-labelledby="blocks-titulo">
           <h2 id="blocks-titulo">Dias de folga</h2>
@@ -67,31 +81,89 @@
         </section>
       </section>
 
-      <section class="view" id="view-calendario" hidden aria-labelledby="cal-titulo">
-        <div class="panel-head">
-          <h1 id="cal-titulo">Calendário</h1>
-          <div class="cal-nav">
-            <button type="button" class="btn btn-quiet" id="cal-prev" aria-label="Mês anterior">Anterior</button>
-            <h2 id="cal-month" aria-live="polite"></h2>
-            <button type="button" class="btn btn-quiet" id="cal-next" aria-label="Próximo mês">Próximo</button>
-            <button type="button" class="link-btn" id="cal-today">Hoje</button>
+      <!-- Sessões: todas as visitas, com filtros -->
+      <section class="view" id="view-sessoes" hidden aria-labelledby="sessoes-titulo">
+        <div class="panel-head"><h1 id="sessoes-titulo">Sessões</h1></div>
+        <div class="filters" role="search" aria-label="Filtrar sessões">
+          <label class="field f-q"><span>Cliente</span><input type="search" id="s-q" placeholder="Nome, telefone ou endereço" autocomplete="off"></label>
+          <label class="field"><span>Situação</span>
+            <select id="s-status">
+              <option value="">Todas</option>
+              <option value="pendente">A confirmar</option>
+              <option value="confirmado">Confirmadas</option>
+              <option value="concluido">Concluídas</option>
+              <option value="cancelado,recusado">Canceladas e recusadas</option>
+            </select></label>
+          <label class="field"><span>Tipo</span>
+            <select id="s-kind">
+              <option value="">Todos os tipos</option>
+              <option value="avulsa">Só avulsas</option>
+              <option value="pacote">Só de pacote</option>
+            </select></label>
+          <label class="field"><span>Atendimento</span><select id="s-service"><option value="">Todos</option></select></label>
+          <label class="field"><span>Período</span>
+            <select id="s-period">
+              <option value="futuro">A partir de hoje</option>
+              <option value="hoje">Só hoje</option>
+              <option value="7d">Próximos 7 dias</option>
+              <option value="mes">Este mês</option>
+              <option value="passadas">Já passaram</option>
+              <option value="tudo">Todo o período</option>
+              <option value="custom">Escolher datas</option>
+            </select></label>
+          <div class="f-dates" id="s-dates" hidden>
+            <label class="field"><span>De</span><input type="date" id="s-from"></label>
+            <label class="field"><span>Até</span><input type="date" id="s-to"></label>
           </div>
+          <button type="button" class="link-btn f-clear" id="s-clear">Limpar filtros</button>
         </div>
-        <p class="cal-legend"><span class="key key-avulso"></span>Sessão avulsa <span class="key key-pacote"></span>Sessão de pacote <span class="key key-feito"></span>Concluída</p>
-        <div class="cal-grid" id="cal-grid"></div>
-        <div class="cal-detail" id="cal-detail" hidden tabindex="-1"></div>
+        <p class="filter-chip" id="s-pkg" hidden></p>
+        <div class="result-bar" id="s-bar"></div>
+        <div id="s-result" aria-live="polite"></div>
       </section>
 
-      <section class="view" id="view-pacotes" hidden aria-labelledby="pac-titulo">
-        <div class="panel-head">
-          <h1 id="pac-titulo">Pacotes</h1>
-          <div class="tabs" role="tablist" aria-label="Filtrar pacotes">
-            <button role="tab" data-pstatus="ativo" aria-selected="true">Ativos</button>
-            <button role="tab" data-pstatus="pendente" aria-selected="false">A confirmar</button>
-            <button role="tab" data-pstatus="encerrados" aria-selected="false">Encerrados</button>
+      <!-- Clientes -->
+      <section class="view" id="view-clientes" hidden aria-labelledby="clientes-titulo">
+        <div id="c-main">
+          <div class="panel-head"><h1 id="clientes-titulo">Clientes</h1></div>
+          <div class="filters" role="search" aria-label="Filtrar clientes">
+            <label class="field f-q"><span>Buscar cliente</span><input type="search" id="c-q" placeholder="Nome, telefone ou endereço" autocomplete="off"></label>
+            <label class="field"><span>Ordenar por</span>
+              <select id="c-sort">
+                <option value="next">Próxima sessão</option>
+                <option value="name">Nome</option>
+                <option value="sessions">Mais sessões</option>
+              </select></label>
           </div>
+          <div class="result-bar" id="c-bar"></div>
+          <div id="c-list" class="clients" aria-live="polite"></div>
         </div>
+        <div id="c-detail" hidden></div>
+      </section>
+
+      <!-- Pacotes -->
+      <section class="view" id="view-pacotes" hidden aria-labelledby="pac-titulo">
+        <div class="panel-head"><h1 id="pac-titulo">Pacotes</h1></div>
         <dl class="pac-summary" id="pac-summary"></dl>
+        <div class="filters" role="search" aria-label="Filtrar pacotes">
+          <label class="field f-q"><span>Cliente</span><input type="search" id="p-q" placeholder="Nome ou telefone" autocomplete="off"></label>
+          <label class="field"><span>Situação</span>
+            <select id="p-status">
+              <option value="ativo">Ativos</option>
+              <option value="pendente">A confirmar</option>
+              <option value="encerrados">Encerrados</option>
+              <option value="">Todos</option>
+            </select></label>
+          <label class="field"><span>Pagamento</span>
+            <select id="p-paid">
+              <option value="">Todos</option>
+              <option value="0">A receber</option>
+              <option value="1">Pagos</option>
+            </select></label>
+          <label class="check f-check"><input type="checkbox" id="p-ending"> Terminam em até 7 dias</label>
+          <button type="button" class="link-btn f-clear" id="p-clear">Limpar filtros</button>
+        </div>
+        <div class="result-bar" id="p-bar"></div>
         <div id="pac-list" class="pac-list" aria-live="polite"></div>
       </section>
     </section>

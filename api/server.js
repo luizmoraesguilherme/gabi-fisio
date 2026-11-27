@@ -22,7 +22,7 @@ const SCHEDULE = {
   days: { 1: ['08:00', '18:00'], 2: ['08:00', '18:00'], 3: ['08:00', '18:00'], 4: ['08:00', '18:00'], 5: ['08:00', '18:00'], 6: ['08:00', '12:00'] },
   stepMinutes: 90, // 60 min de atendimento + 30 de deslocamento
   minLeadHours: 12,
-  horizonDays: 45, // cobre a primeira sessão + os 30 dias de um pacote
+  bookUntil: '2027-12-31', // a agenda do site fica aberta até o fim de dezembro de 2027
 };
 
 // Pacotes: todas as sessões precisam caber em 30 dias a partir da primeira.
@@ -103,8 +103,6 @@ const q = {
   setPackage: db.prepare(`UPDATE packages SET status = ?, price = ?, paid = ?, paid_at = ?, updated_at = ? WHERE id = ?`),
   setPackageSessions: db.prepare(`UPDATE bookings SET status = ?, updated_at = ? WHERE package_id = ? AND status = ?`),
   list: db.prepare(`SELECT * FROM bookings ORDER BY slot ASC`),
-  listRange: db.prepare(`SELECT * FROM bookings WHERE slot >= ? AND slot < ? ORDER BY slot ASC`),
-  listByStatus: db.prepare(`SELECT * FROM bookings WHERE status = ? ORDER BY slot ASC`),
   get: db.prepare(`SELECT * FROM bookings WHERE id = ?`),
   setStatus: db.prepare(`UPDATE bookings SET status = ?, updated_at = ? WHERE id = ?`),
   blocks: db.prepare(`SELECT day, reason FROM blocks WHERE day >= ? ORDER BY day`),
@@ -119,31 +117,31 @@ const nowLocal = () => new Date(Date.now() - 3 * 3600 * 1000);
 const fmtDay = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 const toMin = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
 
-function availableSlots(days = SCHEDULE.horizonDays) {
+function availableSlots(until = SCHEDULE.bookUntil) {
   const now = nowLocal();
   const earliest = new Date(now.getTime() + SCHEDULE.minLeadHours * 3600 * 1000);
   const today = fmtDay(now);
+  const last = until < SCHEDULE.bookUntil ? until : SCHEDULE.bookUntil;
   const taken = new Set(q.takenSlots.all(today).map((r) => r.slot));
   const blocked = new Set(q.blocks.all(today).map((r) => r.day));
   const out = [];
-  for (let i = 0; i < days; i++) {
+  for (let i = 0; i < 800; i++) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + i));
     const day = fmtDay(d);
+    if (day > last) break;
     const hours = SCHEDULE.days[d.getUTCDay()];
     if (!hours || blocked.has(day)) continue;
     const times = [];
     for (let m = toMin(hours[0]); m + 60 <= toMin(hours[1]); m += SCHEDULE.stepMinutes) {
       const time = `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
-      const slot = `${day}T${time}`;
       const at = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), Math.floor(m / 60), m % 60));
-      if (at < earliest || taken.has(slot)) continue;
+      if (at < earliest || taken.has(`${day}T${time}`)) continue;
       times.push(time);
     }
     if (times.length) out.push({ day, weekday: d.getUTCDay(), times });
   }
   return out;
 }
-
 
 function addDays(day, n) {
   const d = new Date(`${day}T12:00:00Z`);
@@ -159,7 +157,7 @@ function validateSlots(slots, need) {
   if (need > 1 && days[days.length - 1] > addDays(days[0], PACKAGE_WINDOW_DAYS - 1)) {
     return `Todas as sessões precisam ficar dentro de ${PACKAGE_WINDOW_DAYS} dias a partir da primeira.`;
   }
-  const free = availableSlots();
+  const free = availableSlots(days[days.length - 1]);
   const bad = slots.find((s) => {
     const entry = free.find((d) => d.day === s.slice(0, 10));
     return !(entry && entry.times.includes(s.slice(11)));
@@ -188,6 +186,82 @@ function packageSummary(pkg) {
     timeProgress: Math.round((elapsed / totalDays) * 100),
     expired: today > pkg.end_day,
   };
+}
+
+// ---------- Consultas do painel ----------
+const fold = (t) => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const digits = (t) => String(t ?? '').replace(/\D/g, '');
+const clientKey = (phone) => digits(phone).slice(-11);
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+function matchesQuery(row, term) {
+  const t = fold(term).trim();
+  if (!t) return true;
+  if (fold(`${row.name} ${row.phone} ${row.address} ${row.for_whom || ''}`).includes(t)) return true;
+  const d = digits(term);
+  return d.length >= 3 && digits(row.phone).includes(d);
+}
+
+function withPackageInfo(rows) {
+  const info = new Map();
+  for (const id of new Set(rows.map((r) => r.package_id).filter(Boolean))) {
+    const pkg = q.getPackage.get(id);
+    info.set(id, { id, sessions: pkg.sessions, status: pkg.status, order: q.packageSessions.all(id).map((x) => x.id) });
+  }
+  return rows.map((r) => {
+    const i = r.package_id ? info.get(r.package_id) : null;
+    return { ...r, pkg: i ? { id: i.id, sessions: i.sessions, status: i.status, n: i.order.indexOf(r.id) + 1 } : null };
+  });
+}
+
+function listBookings(sp) {
+  const where = [], args = [];
+  const statuses = (sp.get('status') || '').split(',').filter((x) => STATUSES.includes(x));
+  if (statuses.length) { where.push(`status IN (${statuses.map(() => '?').join(',')})`); args.push(...statuses); }
+  const service = sp.get('service');
+  if (service && SERVICE_IDS.has(service)) { where.push('service = ?'); args.push(service); }
+  const kind = sp.get('kind');
+  if (kind === 'avulsa') where.push('package_id IS NULL');
+  if (kind === 'pacote') where.push('package_id IS NOT NULL');
+  const pkgId = Number(sp.get('package'));
+  if (pkgId) { where.push('package_id = ?'); args.push(pkgId); }
+  const from = sp.get('from'), to = sp.get('to');
+  if (DAY_RE.test(from || '')) { where.push('slot >= ?'); args.push(from); }
+  if (DAY_RE.test(to || '')) { where.push('slot < ?'); args.push(addDays(to, 1)); } // "to" inclusivo
+  const order = sp.get('order') === 'desc' ? 'DESC' : 'ASC';
+  let rows = db.prepare(`SELECT * FROM bookings${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY slot ${order}`).all(...args);
+  const term = sp.get('q');
+  if (term) rows = rows.filter((r) => matchesQuery(r, term));
+  return rows;
+}
+
+function buildClients() {
+  const now = nowLocal();
+  const nowStr = `${fmtDay(now)}T${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}`;
+  const map = new Map();
+  const get = (r) => {
+    const k = clientKey(r.phone);
+    if (!map.has(k)) map.set(k, { key: k, name: r.name, phone: r.phone, address: r.address, seen: '', sessions: 0, done: 0, upcoming: 0, pending: 0, canceled: 0, nextSlot: null, lastSlot: null, packagesActive: 0, packagesTotal: 0, paidTotal: 0, toReceive: 0 });
+    return map.get(k);
+  };
+  for (const b of q.list.all()) {
+    const c = get(b);
+    if (b.created_at >= c.seen) { c.seen = b.created_at; c.name = b.name; c.phone = b.phone; c.address = b.address; }
+    if (b.status === 'cancelado' || b.status === 'recusado') { c.canceled++; continue; }
+    c.sessions++;
+    if (b.status === 'concluido') { c.done++; if (!c.lastSlot || b.slot > c.lastSlot) c.lastSlot = b.slot; }
+    if (b.status === 'pendente') c.pending++;
+    if (b.status === 'pendente' || b.status === 'confirmado') {
+      c.upcoming++;
+      if (b.slot >= nowStr && (!c.nextSlot || b.slot < c.nextSlot)) c.nextSlot = b.slot;
+    }
+  }
+  for (const pk of q.packages.all()) {
+    const c = get(pk);
+    c.packagesTotal++;
+    if (pk.status === 'ativo') c.packagesActive++;
+    if (pk.status === 'ativo' || pk.status === 'concluido') { if (pk.paid) c.paidTotal += pk.price || 0; else c.toReceive += pk.price || 0; }
+  }
+  return [...map.values()];
 }
 
 // ---------- Sessão (cookie assinado com HMAC) ----------
@@ -267,12 +341,11 @@ async function handle(req, res) {
   if (p === '/api/health') return send(res, 200, { ok: true });
   if (p === '/api/services' && m === 'GET') return send(res, 200, { services: SERVICES });
   if (p === '/api/slots' && m === 'GET') {
-    const days = Math.min(Math.max(Number(url.searchParams.get('days')) || SCHEDULE.horizonDays, 1), SCHEDULE.horizonDays);
-    return send(res, 200, { slots: availableSlots(days) });
+    return send(res, 200, { slots: availableSlots(), today: fmtDay(nowLocal()), until: SCHEDULE.bookUntil });
   }
 
   if (p === '/api/bookings' && m === 'POST') {
-    if (limited(`book:${ipOf(req)}`, 5, 3600 * 1000)) return send(res, 429, { error: 'Muitos pedidos seguidos. Tente de novo em uma hora ou chame no WhatsApp.' });
+    if (limited(`book:${ipOf(req)}`, 12, 3600 * 1000)) return send(res, 429, { error: 'Muitos pedidos seguidos. Tente de novo em uma hora ou chame no WhatsApp.' });
     const b = await readJson(req);
     if (b.website) return send(res, 201, { ok: true }); // campo-isca para robôs
     const plan = Object.hasOwn(PLANS, b.plan) ? b.plan : 'avulso';
@@ -331,11 +404,29 @@ async function handle(req, res) {
     if (p === '/api/admin/me') return send(res, 200, { ok: true });
 
     if (p === '/api/admin/bookings' && m === 'GET') {
-      const status = url.searchParams.get('status');
-      const from = url.searchParams.get('from'), to = url.searchParams.get('to');
-      let rows = from && to ? q.listRange.all(from, to) : status && STATUSES.includes(status) ? q.listByStatus.all(status) : q.list.all();
-      if (from && to && status) rows = rows.filter((r) => r.status === status);
-      return send(res, 200, { bookings: rows });
+      const all = listBookings(url.searchParams);
+      const limit = Math.min(Number(url.searchParams.get('limit')) || 500, 1000);
+      const counts = {};
+      for (const r of all) counts[r.status] = (counts[r.status] || 0) + 1;
+      return send(res, 200, { bookings: withPackageInfo(all.slice(0, limit)), total: all.length, counts });
+    }
+
+    if (p === '/api/admin/clients' && m === 'GET') {
+      const term = url.searchParams.get('q') || '';
+      let list = buildClients().filter((c) => matchesQuery(c, term));
+      const sort = url.searchParams.get('sort') || 'next';
+      if (sort === 'name') list.sort((a, b) => fold(a.name).localeCompare(fold(b.name)));
+      else if (sort === 'sessions') list.sort((a, b) => b.sessions - a.sessions || fold(a.name).localeCompare(fold(b.name)));
+      else list.sort((a, b) => (a.nextSlot ? 0 : 1) - (b.nextSlot ? 0 : 1) || (a.nextSlot || '').localeCompare(b.nextSlot || '') || fold(a.name).localeCompare(fold(b.name)));
+      return send(res, 200, { clients: list });
+    }
+    const cm = p.match(/^\/api\/admin\/clients\/(\d+)$/);
+    if (cm && m === 'GET') {
+      const client = buildClients().find((c) => c.key === cm[1]);
+      if (!client) return send(res, 404, { error: 'Cliente não encontrado.' });
+      const rows = q.list.all().filter((r) => clientKey(r.phone) === client.key).reverse();
+      const pkgs = q.packages.all().filter((x) => clientKey(x.phone) === client.key).reverse().map(packageSummary);
+      return send(res, 200, { client, bookings: withPackageInfo(rows), packages: pkgs });
     }
     const bm = p.match(/^\/api\/admin\/bookings\/(\d+)$/);
     if (bm && m === 'PATCH') {
@@ -359,9 +450,32 @@ async function handle(req, res) {
     }
 
     if (p === '/api/admin/packages' && m === 'GET') {
-      const status = url.searchParams.get('status');
-      const rows = status && PACKAGE_STATUSES.includes(status) ? q.packagesByStatus.all(status) : q.packages.all();
-      return send(res, 200, { packages: rows.map(packageSummary) });
+      const sp = url.searchParams;
+      const all = q.packages.all().map(packageSummary);
+      const money = all.filter((x) => (x.status === 'ativo' || x.status === 'concluido') && !x.paid);
+      const summary = {
+        active: all.filter((x) => x.status === 'ativo').length,
+        pending: all.filter((x) => x.status === 'pendente').length,
+        toReceive: money.reduce((t, x) => t + (x.price || 0), 0),
+        noPrice: money.filter((x) => x.price == null).length,
+        endingSoon: all.filter((x) => x.status === 'ativo' && x.daysLeft <= 7).length,
+      };
+      let rows = all;
+      const st = sp.get('status');
+      if (st === 'encerrados') rows = rows.filter((x) => ['concluido', 'cancelado', 'recusado'].includes(x.status));
+      else if (PACKAGE_STATUSES.includes(st)) rows = rows.filter((x) => x.status === st);
+      const paid = sp.get('paid');
+      if (paid === '1') rows = rows.filter((x) => x.paid);
+      if (paid === '0') rows = rows.filter((x) => !x.paid && (x.status === 'ativo' || x.status === 'concluido'));
+      const ending = Number(sp.get('ending'));
+      if (ending) rows = rows.filter((x) => x.status === 'ativo' && x.daysLeft <= ending);
+      const client = sp.get('client');
+      if (client) rows = rows.filter((x) => clientKey(x.phone) === client);
+      const term = sp.get('q');
+      if (term) rows = rows.filter((x) => matchesQuery(x, term));
+      const open = st === 'ativo' || st === 'pendente';
+      rows.sort((a, b) => (open ? a.end_day.localeCompare(b.end_day) : b.id - a.id));
+      return send(res, 200, { packages: rows, summary });
     }
     const pm = p.match(/^\/api\/admin\/packages\/(\d+)$/);
     if (pm && m === 'PATCH') {

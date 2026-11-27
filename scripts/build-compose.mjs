@@ -3,6 +3,7 @@
 // Uso: node scripts/build-compose.mjs
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,7 +22,14 @@ const configs = {
   api_server: readFileSync(join(root, 'api/server.js'), 'utf8'),
   nginx_conf: readFileSync(join(root, 'web/nginx.conf'), 'utf8'),
 };
-for (const f of WEB_FILES) configs[cfgName(f)] = readFileSync(join(root, 'web', f), 'utf8');
+// Carimba JS e CSS com o hash do conteúdo: arquivo novo = URL nova, então o navegador
+// nunca mistura um HTML novo com um script antigo guardado em cache.
+const ver = (f) => createHash('sha256').update(readFileSync(join(root, 'web', f))).digest('hex').slice(0, 8);
+const stamp = (html) => html.replace(/(src|href)="(styles\.css|app\.js|painel\.js|config\.js)"/g, (_, attr, f) => `${attr}="${f}?v=${ver(f)}"`);
+for (const f of WEB_FILES) {
+  const body = readFileSync(join(root, 'web', f), 'utf8');
+  configs[cfgName(f)] = f.endsWith('.html') ? stamp(body) : body;
+}
 
 const webMounts = WEB_FILES.map((f) => `      - source: ${cfgName(f)}\n        target: /usr/share/nginx/html/${f}`).join('\n');
 
