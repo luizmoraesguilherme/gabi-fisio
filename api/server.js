@@ -22,8 +22,12 @@ const SCHEDULE = {
   days: { 1: ['08:00', '18:00'], 2: ['08:00', '18:00'], 3: ['08:00', '18:00'], 4: ['08:00', '18:00'], 5: ['08:00', '18:00'], 6: ['08:00', '12:00'] },
   stepMinutes: 90, // 60 min de atendimento + 30 de deslocamento
   minLeadHours: 12,
-  horizonDays: 21,
+  horizonDays: 45, // cobre a primeira sessão + os 30 dias de um pacote
 };
+
+// Pacotes: todas as sessões precisam caber em 30 dias a partir da primeira.
+const PLANS = { avulso: 1, pacote4: 4, pacote8: 8 };
+const PACKAGE_WINDOW_DAYS = 30;
 
 const SERVICES = [
   { id: 'idosos', name: 'Fisioterapia para idosos', group: 'reabilitacao', minutes: 60, blurb: 'Força, equilíbrio e prevenção de quedas, com exercícios adaptados à casa.' },
@@ -39,6 +43,7 @@ const SERVICE_IDS = new Set(SERVICES.map((s) => s.id));
 
 const STATUSES = ['pendente', 'confirmado', 'recusado', 'concluido', 'cancelado'];
 const BLOCKING = ['pendente', 'confirmado'];
+const PACKAGE_STATUSES = ['pendente', 'ativo', 'concluido', 'recusado', 'cancelado'];
 
 // ---------- Banco ----------
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -59,17 +64,46 @@ db.exec(`
     updated_at TEXT
   );
   CREATE INDEX IF NOT EXISTS bookings_slot ON bookings(slot);
+  CREATE TABLE IF NOT EXISTS packages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    service TEXT NOT NULL,
+    sessions INTEGER NOT NULL,
+    start_day TEXT NOT NULL,
+    end_day TEXT NOT NULL,
+    address TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pendente',
+    price REAL,
+    paid INTEGER NOT NULL DEFAULT 0,
+    paid_at TEXT,
+    updated_at TEXT
+  );
   CREATE TABLE IF NOT EXISTS blocks (
     day TEXT PRIMARY KEY,
     reason TEXT
   );
 `);
 
+// Migração: sessões podem pertencer a um pacote.
+if (!db.prepare(`PRAGMA table_info(bookings)`).all().some((c) => c.name === 'package_id')) {
+  db.exec(`ALTER TABLE bookings ADD COLUMN package_id INTEGER REFERENCES packages(id)`);
+}
+
 const q = {
   takenSlots: db.prepare(`SELECT slot FROM bookings WHERE slot >= ? AND status IN ('pendente','confirmado')`),
   slotTaken: db.prepare(`SELECT 1 FROM bookings WHERE slot = ? AND status IN ('pendente','confirmado') LIMIT 1`),
-  insert: db.prepare(`INSERT INTO bookings (created_at, name, phone, service, slot, address, for_whom, notes) VALUES (?,?,?,?,?,?,?,?)`),
+  insert: db.prepare(`INSERT INTO bookings (created_at, name, phone, service, slot, address, for_whom, notes, package_id) VALUES (?,?,?,?,?,?,?,?,?)`),
+  insertPackage: db.prepare(`INSERT INTO packages (created_at, name, phone, service, sessions, start_day, end_day, address) VALUES (?,?,?,?,?,?,?,?)`),
+  packages: db.prepare(`SELECT * FROM packages ORDER BY end_day ASC`),
+  packagesByStatus: db.prepare(`SELECT * FROM packages WHERE status = ? ORDER BY end_day ASC`),
+  getPackage: db.prepare(`SELECT * FROM packages WHERE id = ?`),
+  packageSessions: db.prepare(`SELECT * FROM bookings WHERE package_id = ? ORDER BY slot`),
+  setPackage: db.prepare(`UPDATE packages SET status = ?, price = ?, paid = ?, paid_at = ?, updated_at = ? WHERE id = ?`),
+  setPackageSessions: db.prepare(`UPDATE bookings SET status = ?, updated_at = ? WHERE package_id = ? AND status = ?`),
   list: db.prepare(`SELECT * FROM bookings ORDER BY slot ASC`),
+  listRange: db.prepare(`SELECT * FROM bookings WHERE slot >= ? AND slot < ? ORDER BY slot ASC`),
   listByStatus: db.prepare(`SELECT * FROM bookings WHERE status = ? ORDER BY slot ASC`),
   get: db.prepare(`SELECT * FROM bookings WHERE id = ?`),
   setStatus: db.prepare(`UPDATE bookings SET status = ?, updated_at = ? WHERE id = ?`),
@@ -110,11 +144,50 @@ function availableSlots(days = SCHEDULE.horizonDays) {
   return out;
 }
 
-function isBookable(slot) {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(slot)) return false;
-  const [day, time] = slot.split('T');
-  const entry = availableSlots().find((d) => d.day === day);
-  return Boolean(entry && entry.times.includes(time));
+
+function addDays(day, n) {
+  const d = new Date(`${day}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return fmtDay(d);
+}
+
+function validateSlots(slots, need) {
+  if (slots.length !== need) return need === 1 ? 'Escolha um dia e um horário.' : `Escolha as ${need} sessões do pacote (faltam ${need - slots.length}).`;
+  if (!slots.every((s) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s))) return 'Horário inválido.';
+  const days = slots.map((s) => s.slice(0, 10));
+  if (new Set(days).size !== days.length) return 'Escolha no máximo uma sessão por dia.';
+  if (need > 1 && days[days.length - 1] > addDays(days[0], PACKAGE_WINDOW_DAYS - 1)) {
+    return `Todas as sessões precisam ficar dentro de ${PACKAGE_WINDOW_DAYS} dias a partir da primeira.`;
+  }
+  const free = availableSlots();
+  const bad = slots.find((s) => {
+    const entry = free.find((d) => d.day === s.slice(0, 10));
+    return !(entry && entry.times.includes(s.slice(11)));
+  });
+  return bad ? `O horário de ${bad.replace('T', ' às ')} não está mais livre. Escolha outro.` : '';
+}
+
+function packageSummary(pkg) {
+  const sessions = q.packageSessions.all(pkg.id);
+  const count = (st) => sessions.filter((s) => s.status === st).length;
+  const done = count('concluido');
+  const today = fmtDay(nowLocal());
+  const totalDays = PACKAGE_WINDOW_DAYS;
+  const elapsed = Math.min(totalDays, Math.max(0, Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${pkg.start_day}T12:00:00Z`)) / 86400000) + 1));
+  return {
+    ...pkg,
+    paid: Boolean(pkg.paid),
+    sessionsList: sessions.map((s) => ({ id: s.id, slot: s.slot, status: s.status })),
+    done,
+    scheduled: count('confirmado') + count('pendente'),
+    canceled: count('cancelado') + count('recusado'),
+    remaining: pkg.sessions - done,
+    progress: Math.round((done / pkg.sessions) * 100),
+    daysElapsed: elapsed,
+    daysLeft: Math.max(0, Math.round((Date.parse(`${pkg.end_day}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400000)),
+    timeProgress: Math.round((elapsed / totalDays) * 100),
+    expired: today > pkg.end_day,
+  };
 }
 
 // ---------- Sessão (cookie assinado com HMAC) ----------
@@ -202,11 +275,14 @@ async function handle(req, res) {
     if (limited(`book:${ipOf(req)}`, 5, 3600 * 1000)) return send(res, 429, { error: 'Muitos pedidos seguidos. Tente de novo em uma hora ou chame no WhatsApp.' });
     const b = await readJson(req);
     if (b.website) return send(res, 201, { ok: true }); // campo-isca para robôs
+    const plan = Object.hasOwn(PLANS, b.plan) ? b.plan : 'avulso';
+    const need = PLANS[plan];
+    const rawSlots = Array.isArray(b.slots) ? b.slots : [b.slot];
+    const slots = [...new Set(rawSlots.map((x) => clean(x, 16)).filter(Boolean))].sort();
     const data = {
       name: clean(b.name, 80),
       phone: clean(b.phone, 30),
       service: clean(b.service, 40),
-      slot: clean(b.slot, 16),
       address: clean(b.address, 200),
       forWhom: clean(b.forWhom, 80),
       notes: clean(b.notes, 600),
@@ -216,15 +292,25 @@ async function handle(req, res) {
     if (data.phone.replace(/\D/g, '').length < 10) errors.phone = 'Informe um telefone com DDD.';
     if (!SERVICE_IDS.has(data.service)) errors.service = 'Escolha um atendimento.';
     if (data.address.length < 5) errors.address = 'Informe o endereço do atendimento.';
-    if (!isBookable(data.slot)) errors.slot = 'Esse horário não está mais livre. Escolha outro.';
+    const slotError = validateSlots(slots, need);
+    if (slotError) errors.slot = slotError;
     if (Object.keys(errors).length) return send(res, 422, { errors });
+
     // Revalida dentro de uma transação para evitar dois pedidos no mesmo horário.
     db.exec('BEGIN IMMEDIATE');
     try {
-      if (q.slotTaken.get(data.slot)) { db.exec('ROLLBACK'); return send(res, 409, { errors: { slot: 'Esse horário acabou de ser reservado. Escolha outro.' } }); }
-      const r = q.insert.run(new Date().toISOString(), data.name, data.phone, data.service, data.slot, data.address, data.forWhom, data.notes);
+      const busy = slots.find((s) => q.slotTaken.get(s));
+      if (busy) { db.exec('ROLLBACK'); return send(res, 409, { errors: { slot: `O horário de ${busy.replace('T', ' às ')} acabou de ser reservado. Escolha outro.` } }); }
+      const now = new Date().toISOString();
+      let packageId = null;
+      if (need > 1) {
+        const startDay = slots[0].slice(0, 10);
+        const r = q.insertPackage.run(now, data.name, data.phone, data.service, need, startDay, addDays(startDay, PACKAGE_WINDOW_DAYS - 1), data.address);
+        packageId = Number(r.lastInsertRowid);
+      }
+      for (const s of slots) q.insert.run(now, data.name, data.phone, data.service, s, data.address, data.forWhom, data.notes, packageId);
       db.exec('COMMIT');
-      return send(res, 201, { ok: true, id: Number(r.lastInsertRowid), slot: data.slot });
+      return send(res, 201, { ok: true, packageId, slots });
     } catch (e) { db.exec('ROLLBACK'); throw e; }
   }
 
@@ -246,7 +332,9 @@ async function handle(req, res) {
 
     if (p === '/api/admin/bookings' && m === 'GET') {
       const status = url.searchParams.get('status');
-      const rows = status && STATUSES.includes(status) ? q.listByStatus.all(status) : q.list.all();
+      const from = url.searchParams.get('from'), to = url.searchParams.get('to');
+      let rows = from && to ? q.listRange.all(from, to) : status && STATUSES.includes(status) ? q.listByStatus.all(status) : q.list.all();
+      if (from && to && status) rows = rows.filter((r) => r.status === status);
       return send(res, 200, { bookings: rows });
     }
     const bm = p.match(/^\/api\/admin\/bookings\/(\d+)$/);
@@ -258,8 +346,54 @@ async function handle(req, res) {
       if (BLOCKING.includes(b.status) && !BLOCKING.includes(row.status) && q.slotTaken.get(row.slot)) {
         return send(res, 409, { error: 'Já existe outro atendimento nesse horário.' });
       }
-      q.setStatus.run(b.status, new Date().toISOString(), row.id);
+      const now = new Date().toISOString();
+      q.setStatus.run(b.status, now, row.id);
+      if (row.package_id) {
+        const pkg = q.getPackage.get(row.package_id);
+        const sessions = q.packageSessions.all(pkg.id);
+        if (pkg.status === 'ativo' && sessions.filter((s) => s.status === 'concluido').length >= pkg.sessions) {
+          q.setPackage.run('concluido', pkg.price, pkg.paid, pkg.paid_at, now, pkg.id);
+        }
+      }
       return send(res, 200, { booking: q.get.get(row.id) });
+    }
+
+    if (p === '/api/admin/packages' && m === 'GET') {
+      const status = url.searchParams.get('status');
+      const rows = status && PACKAGE_STATUSES.includes(status) ? q.packagesByStatus.all(status) : q.packages.all();
+      return send(res, 200, { packages: rows.map(packageSummary) });
+    }
+    const pm = p.match(/^\/api\/admin\/packages\/(\d+)$/);
+    if (pm && m === 'PATCH') {
+      const b = await readJson(req);
+      const pkg = q.getPackage.get(Number(pm[1]));
+      if (!pkg) return send(res, 404, { error: 'Pacote não encontrado.' });
+      const now = new Date().toISOString();
+      let status = pkg.status;
+      if (b.status !== undefined) {
+        if (!PACKAGE_STATUSES.includes(b.status)) return send(res, 422, { error: 'Status inválido.' });
+        status = b.status;
+      }
+      let price = pkg.price;
+      if (b.price !== undefined) {
+        const v = b.price === null || b.price === '' ? null : Number(String(b.price).replace(',', '.'));
+        if (v !== null && (!Number.isFinite(v) || v < 0)) return send(res, 422, { error: 'Valor inválido.' });
+        price = v;
+      }
+      let paid = pkg.paid, paidAt = pkg.paid_at;
+      if (b.paid !== undefined) { paid = b.paid ? 1 : 0; paidAt = b.paid ? now : null; }
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        q.setPackage.run(status, price, paid, paidAt, now, pkg.id);
+        // Confirmar o pacote confirma todas as sessões pedidas; recusar/cancelar libera os horários.
+        if (status !== pkg.status) {
+          if (status === 'ativo') q.setPackageSessions.run('confirmado', now, pkg.id, 'pendente');
+          if (status === 'recusado') q.setPackageSessions.run('recusado', now, pkg.id, 'pendente');
+          if (status === 'cancelado') { q.setPackageSessions.run('cancelado', now, pkg.id, 'pendente'); q.setPackageSessions.run('cancelado', now, pkg.id, 'confirmado'); }
+        }
+        db.exec('COMMIT');
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+      return send(res, 200, { package: packageSummary(q.getPackage.get(pkg.id)) });
     }
 
     if (p === '/api/admin/blocks' && m === 'GET') return send(res, 200, { blocks: q.blocks.all(fmtDay(nowLocal())) });

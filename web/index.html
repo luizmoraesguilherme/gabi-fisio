@@ -104,10 +104,21 @@
         </fieldset>
 
         <fieldset>
-          <legend>Dia e horário</legend>
+          <legend>Sessão avulsa ou pacote</legend>
+          <div class="plans" role="radiogroup" aria-label="Plano">
+            <label class="plan"><input type="radio" name="plan" value="avulso" checked><span><strong>Sessão avulsa</strong><small>Uma visita.</small></span></label>
+            <label class="plan"><input type="radio" name="plan" value="pacote4"><span><strong>Pacote de 4 sessões</strong><small>Uma por semana, em média.</small></span></label>
+            <label class="plan"><input type="radio" name="plan" value="pacote8"><span><strong>Pacote de 8 sessões</strong><small>Duas por semana, em média.</small></span></label>
+          </div>
+          <p class="plan-rule" id="plan-rule" hidden>No pacote, você já marca todas as sessões agora. Elas precisam caber em 30 dias contados a partir da primeira, com no máximo uma por dia.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend id="slot-legend">Dia e horário</legend>
           <div class="day-picker" id="day-picker" role="radiogroup" aria-label="Dia"></div>
           <div class="time-picker" id="time-picker" role="radiogroup" aria-label="Horário"></div>
           <p class="picked" id="picked" aria-live="polite">Nenhum horário escolhido.</p>
+          <ul class="chosen" id="chosen"></ul>
           <em class="error" data-for="slot"></em>
         </fieldset>
 

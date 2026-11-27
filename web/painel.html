@@ -36,27 +36,63 @@
     </section>
 
     <section id="app" hidden>
-      <div class="panel-head">
-        <h1>Pedidos</h1>
-        <div class="tabs" role="tablist" aria-label="Filtrar pedidos">
-          <button role="tab" data-status="pendente" aria-selected="true">A confirmar <span class="count" id="count-pendente"></span></button>
-          <button role="tab" data-status="confirmado" aria-selected="false">Confirmados</button>
-          <button role="tab" data-status="concluido" aria-selected="false">Concluídos</button>
-          <button role="tab" data-status="" aria-selected="false">Todos</button>
-        </div>
-      </div>
+      <nav class="views" aria-label="Seções do painel">
+        <button type="button" data-view="pedidos" aria-current="page">Pedidos <span class="count" id="count-pendente"></span></button>
+        <button type="button" data-view="calendario">Calendário</button>
+        <button type="button" data-view="pacotes">Pacotes</button>
+      </nav>
       <p class="form-status" id="panel-status" role="status"></p>
-      <div id="list" class="bookings" aria-live="polite"></div>
 
-      <section class="blocks" aria-labelledby="blocks-titulo">
-        <h2 id="blocks-titulo">Dias de folga</h2>
-        <p>Dias marcados aqui somem da agenda do site.</p>
-        <form id="block-form" class="block-form">
-          <label class="field"><span>Data</span><input type="date" name="day" required></label>
-          <label class="field"><span>Motivo <i>opcional</i></span><input name="reason" maxlength="80" placeholder="Viagem, curso…"></label>
-          <button class="btn btn-quiet" type="submit">Bloquear dia</button>
-        </form>
-        <ul id="block-list" class="block-list"></ul>
+      <section class="view" id="view-pedidos" aria-labelledby="pedidos-titulo">
+        <div class="panel-head">
+          <h1 id="pedidos-titulo">Pedidos</h1>
+          <div class="tabs" role="tablist" aria-label="Filtrar pedidos">
+            <button role="tab" data-status="pendente" aria-selected="true">A confirmar</button>
+            <button role="tab" data-status="confirmado" aria-selected="false">Confirmados</button>
+            <button role="tab" data-status="concluido" aria-selected="false">Concluídos</button>
+            <button role="tab" data-status="" aria-selected="false">Todos</button>
+          </div>
+        </div>
+        <div id="list" class="bookings" aria-live="polite"></div>
+
+        <section class="blocks" aria-labelledby="blocks-titulo">
+          <h2 id="blocks-titulo">Dias de folga</h2>
+          <p>Dias marcados aqui somem da agenda do site.</p>
+          <form id="block-form" class="block-form">
+            <label class="field"><span>Data</span><input type="date" name="day" required></label>
+            <label class="field"><span>Motivo <i>opcional</i></span><input name="reason" maxlength="80" placeholder="Viagem, curso…"></label>
+            <button class="btn btn-quiet" type="submit">Bloquear dia</button>
+          </form>
+          <ul id="block-list" class="block-list"></ul>
+        </section>
+      </section>
+
+      <section class="view" id="view-calendario" hidden aria-labelledby="cal-titulo">
+        <div class="panel-head">
+          <h1 id="cal-titulo">Calendário</h1>
+          <div class="cal-nav">
+            <button type="button" class="btn btn-quiet" id="cal-prev" aria-label="Mês anterior">Anterior</button>
+            <h2 id="cal-month" aria-live="polite"></h2>
+            <button type="button" class="btn btn-quiet" id="cal-next" aria-label="Próximo mês">Próximo</button>
+            <button type="button" class="link-btn" id="cal-today">Hoje</button>
+          </div>
+        </div>
+        <p class="cal-legend"><span class="key key-avulso"></span>Sessão avulsa <span class="key key-pacote"></span>Sessão de pacote <span class="key key-feito"></span>Concluída</p>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-detail" id="cal-detail" hidden tabindex="-1"></div>
+      </section>
+
+      <section class="view" id="view-pacotes" hidden aria-labelledby="pac-titulo">
+        <div class="panel-head">
+          <h1 id="pac-titulo">Pacotes</h1>
+          <div class="tabs" role="tablist" aria-label="Filtrar pacotes">
+            <button role="tab" data-pstatus="ativo" aria-selected="true">Ativos</button>
+            <button role="tab" data-pstatus="pendente" aria-selected="false">A confirmar</button>
+            <button role="tab" data-pstatus="encerrados" aria-selected="false">Encerrados</button>
+          </div>
+        </div>
+        <dl class="pac-summary" id="pac-summary"></dl>
+        <div id="pac-list" class="pac-list" aria-live="polite"></div>
       </section>
     </section>
   </main>
